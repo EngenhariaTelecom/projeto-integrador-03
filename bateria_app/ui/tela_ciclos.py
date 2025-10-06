@@ -1,4 +1,3 @@
-# ui/tela_ciclos.py
 import ttkbootstrap as tb
 
 class TelaCiclos(tb.Frame):
@@ -6,8 +5,11 @@ class TelaCiclos(tb.Frame):
         super().__init__(parent)
         self.controller = controller
 
-        tb.Label(self, text="🔄 Teste de Ciclos", font=("Helvetica", 18, "bold")).pack(pady=20)
-        tb.Label(self, text="(Aqui serão configurados e executados os ciclos de carga/descarga)").pack(pady=10)
+        # Centraliza tudo visualmente no meio da tela
+        conteudo = tb.Frame(self)
+        conteudo.place(relx=0.5, rely=0.5, anchor="center")
 
-        tb.Button(self, text="Voltar ao Monitoramento", bootstyle="secondary-outline",
+        tb.Label(conteudo, text="🔄 Teste de Ciclos", font=("Helvetica", 18, "bold")).pack(pady=20)
+        tb.Label(conteudo, text="(Aqui serão configurados e executados os ciclos de carga/descarga)").pack(pady=10)
+        tb.Button(conteudo, text="Voltar ao Monitoramento", bootstyle="secondary-outline",
                   command=lambda: controller.show_frame("TelaMonitoramento")).pack(pady=20)

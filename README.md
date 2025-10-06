@@ -14,12 +14,14 @@ bateria_app/
 │
 ├── main.py                     # Ponto de entrada da aplicação
 │
-├── ui/
-│   ├── __init__.py
-│   ├── tela_selecao.py         # Interface de seleção de bateria
-│   ├── tela_monitoramento.py   # Interface de monitoramento em tempo real
-│   ├── tela_ciclos.py          # Interface de testes de carga/descarga
-│   └── tela_historico.py       # Histórico de medições e exportação
+├── bateria/
+│   ├── bateriaA.json           # exemplo 1
+│   ├── bateriaB.json           # exemplo 2
+│   ├── bateriaC.json           # exemplo 3
+│   .
+│   .
+│   .
+│    └── bateriaN.json          # idealmente aceitando n baterias
 │
 ├── core/
 │   ├── __init__.py
@@ -28,6 +30,13 @@ bateria_app/
 │   ├── testes.py               # Gerenciamento dos ciclos de carga/descarga
 │   ├── historico.py            # Salvamento e leitura dos CSVs
 │   └── utils.py                # Funções auxiliares (tempo, formatação etc.)
+│
+├── ui/
+│   ├── __init__.py
+│   ├── tela_selecao.py         # Interface de seleção de bateria
+│   ├── tela_monitoramento.py   # Interface de monitoramento em tempo real
+│   ├── tela_ciclos.py          # Interface de testes de carga/descarga
+│   └── tela_historico.py       # Histórico de medições e exportação
 │
 └── assets/
     ├── icons/                  # Ícones e imagens de interface
