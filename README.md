@@ -7,3 +7,29 @@
 de carga e descarga de baterias, monitorando a tensão ao longo do tempo. A aplicação
 permitirá analisar o comportamento de baterias, facilitando a previsão de desempenho e a
 elaboração de relatórios automáticos com gráficos de tensão versus tempo.
+
+atual estrutura de pastas do protótipo:
+```
+bateria_app/
+│
+├── main.py                     # Ponto de entrada da aplicação
+│
+├── ui/
+│   ├── __init__.py
+│   ├── tela_selecao.py         # Interface de seleção de bateria
+│   ├── tela_monitoramento.py   # Interface de monitoramento em tempo real
+│   ├── tela_ciclos.py          # Interface de testes de carga/descarga
+│   └── tela_historico.py       # Histórico de medições e exportação
+│
+├── core/
+│   ├── __init__.py
+│   ├── bateria.py              # Classe Battery com atributos e métodos
+│   ├── monitor.py              # Lógica de leitura/simulação de sensores
+│   ├── testes.py               # Gerenciamento dos ciclos de carga/descarga
+│   ├── historico.py            # Salvamento e leitura dos CSVs
+│   └── utils.py                # Funções auxiliares (tempo, formatação etc.)
+│
+└── assets/
+    ├── icons/                  # Ícones e imagens de interface
+    └── dados/                  # CSVs e logs de testes
+```
