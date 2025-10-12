@@ -25,10 +25,12 @@ class BatteryApp(tb.Window):
         # container principal
         self.container = tb.Frame(self)
         self.container.grid(row=0, column=0, sticky="nsew")
-
         # Faz a janela expandir o container
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
+        # Faz o container expandir os frames
+        self.container.grid_rowconfigure(0, weight=1)
+        self.container.grid_columnconfigure(0, weight=1)
 
         # páginas
         self.frames = {}
@@ -36,6 +38,11 @@ class BatteryApp(tb.Window):
             frame = Tela(parent=self.container, controller=self)
             self.frames[Tela.__name__] = frame
             frame.grid(row=0, column=0, sticky="nsew")
+            # Garante que widgets internos do frame se expandam
+            if hasattr(frame, 'grid_rowconfigure'):
+                frame.grid_rowconfigure(0, weight=1)
+            if hasattr(frame, 'grid_columnconfigure'):
+                frame.grid_columnconfigure(0, weight=1)
 
         self.show_frame("TelaSelecao")
 

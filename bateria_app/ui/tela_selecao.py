@@ -20,9 +20,8 @@ class TelaSelecao(ttk.Frame):
         # Frame central (fixo, mas que expande com o conteúdo)
         container = ttk.Frame(self)
         container.grid(row=1, column=1, sticky="nsew", padx=20, pady=20)
-        container.grid_rowconfigure(0, weight=0)
-        container.grid_rowconfigure(1, weight=0)
-        container.grid_rowconfigure(2, weight=1)
+        for i in range(3):
+            container.grid_rowconfigure(i, weight=1)
         container.grid_columnconfigure(0, weight=1)
 
         # Título
@@ -87,7 +86,6 @@ class TelaSelecao(ttk.Frame):
                 self.baterias_frame,
                 text=texto,
                 bootstyle=estilo,
-                width=30,
                 padding=20,
                 command=lambda d=dados: self._selecionar_bateria(d)
             )
