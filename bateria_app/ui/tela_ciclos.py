@@ -1,3 +1,4 @@
+# ui/tela_ciclos.py
 import ttkbootstrap as tb
 
 class TelaCiclos(tb.Frame):
