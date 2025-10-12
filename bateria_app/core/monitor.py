@@ -43,3 +43,4 @@ class ESPReader(threading.Thread):
         if self.ser:
             self.ser.close()
             print("🔌 Conexão encerrada.")
+

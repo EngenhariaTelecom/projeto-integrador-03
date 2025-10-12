@@ -1,5 +1,6 @@
 # ui/base_app.py
 import ttkbootstrap as tb
+from core.monitor import ESPReader
 from ui.tela_selecao import TelaSelecao
 from ui.tela_monitoramento import TelaMonitoramento
 from ui.tela_ciclos import TelaCiclos
@@ -32,6 +33,13 @@ class BatteryApp(tb.Window):
         self.container.grid_rowconfigure(0, weight=1)
         self.container.grid_columnconfigure(0, weight=1)
 
+
+        # --------------------------
+        # Backend: ESPReader
+        # --------------------------
+        self.esp_reader = ESPReader(porta='/dev/ttyUSB0')  # substitua a porta correta
+        self.esp_reader.start()  # inicia thread de leitura
+
         # páginas
         self.frames = {}
         for Tela in (TelaSelecao, TelaMonitoramento, TelaCiclos, TelaHistorico):
@@ -50,3 +58,9 @@ class BatteryApp(tb.Window):
         """Mostra a tela indicada pelo nome da classe"""
         frame = self.frames[nome]
         frame.tkraise()
+        
+    def on_closing(self):
+        """Encerra o backend e fecha a janela"""
+        if hasattr(self, 'esp_reader'):
+            self.esp_reader.parar()  # função que fecha a serial e thread do backend
+        self.destroy()
