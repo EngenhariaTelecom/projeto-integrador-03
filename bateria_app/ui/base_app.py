@@ -11,10 +11,14 @@ class BatteryApp(tb.Window):
         self.title("Monitor de Bateria v1.0")
         self.geometry("1200x700")
 
-        # ALTERAR ICONE
-        caminho_icone = "assets/icons/icon.ico"  # caminho para o seu .ico
+        # ALTERAR ICONE para multiplataforma usando .png
+        import os
+        from tkinter import PhotoImage
+        caminho_icone = os.path.join(os.path.dirname(__file__), "..", "assets", "icons", "icon.png")
+        caminho_icone = os.path.abspath(caminho_icone)
         try:
-            self.iconbitmap(caminho_icone)
+            icon_image = PhotoImage(file=caminho_icone)
+            self.iconphoto(False, icon_image)
         except Exception as e:
             print(f"Não foi possível carregar o ícone: {e}")
 

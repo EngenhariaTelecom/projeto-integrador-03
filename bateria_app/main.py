@@ -1,6 +1,8 @@
 # main.py
 import sys
-sys.path.append("assets\libs")
+import os
+
+sys.path.append(os.path.join(os.path.dirname(__file__), "assets", "lib"))
 
 from ui.base_app import BatteryApp
 
