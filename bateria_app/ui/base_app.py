@@ -37,7 +37,7 @@ class BatteryApp(tb.Window):
         # --------------------------
         # Backend: ESPReader
         # --------------------------
-        self.esp_reader = ESPReader(porta='/dev/ttyUSB0')  # substitua a porta correta
+        self.esp_reader = ESPReader() 
         self.esp_reader.start()  # inicia thread de leitura
 
         # páginas
