@@ -40,7 +40,7 @@ bateria_app/
 │
 └── assets/
     ├── icons/                  # Ícones e imagens de interface
+    ├── dados/                  # CSVs e logs de testes
     ├── lib/                    # Bibliotecas usadas no python
-    ├── mqtt/                   # Local do Broker Mosquitto
-    └── dados/                  # CSVs e logs de testes
+    └── mqtt/                   # Local do Broker Mosquitto
 ```
