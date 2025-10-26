@@ -20,7 +20,7 @@ class TelaConfiguracao(ttk.Frame):
 
         ttk.Label(container, text="⚙️ Configuração da Simulação", font=("Segoe UI", 20, "bold")).pack(pady=(0,15))
 
-        # Informações da bateria selecionada
+        # Informações da bateria
         self.frame_bateria = ttk.Frame(container)
         self.frame_bateria.pack(pady=5)
         self._atualizar_frame_bateria()
@@ -70,7 +70,7 @@ class TelaConfiguracao(ttk.Frame):
         ttk.Button(self.frame_botoes, text="Voltar", bootstyle=WARNING, command=lambda: controller.show_frame("TelaInicial")).pack(side="left", padx=5)
         ttk.Button(self.frame_botoes, text="Iniciar Simulação", bootstyle=SUCCESS, command=self._iniciar_simulacao).pack(side="left", padx=5)
 
-        # Inicializa ESP como None
+        # Inicializa ESPReader como None
         self.esp_reader = None
 
     def _atualizar_frame_bateria(self):
@@ -86,10 +86,7 @@ class TelaConfiguracao(ttk.Frame):
         self._atualizar_frame_bateria()
 
     def _listar_portas_usb(self):
-        portas = []
-        for p in serial.tools.list_ports.comports():
-            portas.append(f"{p.device} - {p.description}")
-        return portas if portas else []
+        return [f"{p.device} - {p.description}" for p in serial.tools.list_ports.comports()]
 
     def _selecionar_porta(self, porta):
         self.porta_var.set(porta)
@@ -109,17 +106,19 @@ class TelaConfiguracao(ttk.Frame):
         threading.Thread(target=self._thread_busca_esp, daemon=True).start()
 
     def _thread_busca_esp(self):
+        """Busca ESP em thread e atualiza interface via after"""
         try:
             esp = ESPReader()
             esp.conectar()
             if esp.running:
                 self.esp_reader = esp
-                self.porta_var.set(esp.porta)
-                self.status_label.config(text=f"Status: ESP encontrada na porta {esp.porta}")
+                porta = esp.porta
+                self.after(0, lambda: self.porta_var.set(porta))
+                self.after(0, lambda: self.status_label.config(text=f"Status: ESP encontrada na porta {porta}"))
             else:
-                self.status_label.config(text="Status: Nenhuma ESP encontrada")
+                self.after(0, lambda: self.status_label.config(text="Status: Nenhuma ESP encontrada"))
         except Exception as e:
-            self.status_label.config(text=f"Erro: {e}")
+            self.after(0, lambda: self.status_label.config(text=f"Erro: {e}"))
 
     def _iniciar_simulacao(self):
         porta = self.porta_var.get().strip()
@@ -134,15 +133,12 @@ class TelaConfiguracao(ttk.Frame):
             messagebox.showwarning("Erro", "Informe o nome do arquivo CSV.")
             return
 
-        # Cria diretório assets/dados se não existir
+        # Cria diretório assets/dados
         pasta_dados = os.path.join(os.getcwd(), "assets", "dados")
-        if not os.path.exists(pasta_dados):
-            os.makedirs(pasta_dados)
+        os.makedirs(pasta_dados, exist_ok=True)
 
-        # Caminho completo do CSV
         csv_file = os.path.join(pasta_dados, f"{nome_arquivo}.csv")
 
-        # Salva dados no controller
         self.controller.simulacao_dados = {
             "porta": porta,
             "csv": csv_file,
@@ -151,13 +147,11 @@ class TelaConfiguracao(ttk.Frame):
             "dados_bateria": self.dados_bateria
         }
 
-        # Inicia ESPReader e define CSV
         try:
             self.controller.esp_reader = ESPReader(porta=porta)
-            self.controller.esp_reader.definir_csv(csv_file)  # define CSV dinamicamente
+            self.controller.esp_reader.definir_csv(csv_file)
             self.controller.esp_reader.start()
         except Exception as e:
             print("Erro iniciando ESPReader:", e)
 
-        # Vai para TelaMonitoramento
         self.controller.show_frame("TelaMonitoramento")
