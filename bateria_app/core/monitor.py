@@ -1,3 +1,4 @@
+# core/monitor.py
 import serial
 import serial.tools.list_ports
 import threading
@@ -8,13 +9,10 @@ import csv
 class ESPReader(threading.Thread):
     """
     Thread que lê dados da ESP32 via serial.
-    Responsável por:
-      - Buscar a porta automaticamente se não fornecida
-      - Ler linha no formato: Vbat: 3.874 V | Mode: AUTO | Charge: ON | Disch: OFF
-      - Salvar últimos valores em atributos: ultima_leitura, ultima_tensao, modo, carga, descarga
-      - Salvar dados em CSV
+    Pode ser instanciado sem definir arquivo CSV.
+    Apenas ao salvar dados, o CSV precisa estar definido.
     """
-    def __init__(self, porta=None, baudrate=115200, arquivo_csv="assets/dados/dados_bateria.csv"):
+    def __init__(self, porta=None, baudrate=115200):
         super().__init__(daemon=True)
         self.porta = porta
         self.baudrate = baudrate
@@ -25,11 +23,12 @@ class ESPReader(threading.Thread):
         self.modo = "AUTO"
         self.carga = "OFF"
         self.descarga = "OFF"
-        self.arquivo_csv = arquivo_csv
+        self.arquivo_csv = None  # ainda não definido
         self.tempo_inicial = time.time()
-        self._criar_csv()
 
-    def _criar_csv(self):
+    def definir_csv(self, caminho_csv):
+        """Define o arquivo CSV que será usado e cria o arquivo se não existir"""
+        self.arquivo_csv = os.path.abspath(caminho_csv)
         pasta = os.path.dirname(self.arquivo_csv)
         if not os.path.exists(pasta):
             os.makedirs(pasta)
@@ -39,6 +38,8 @@ class ESPReader(threading.Thread):
                 writer.writerow(["Tempo (s)", "Tensao (V)", "Modo", "Carga", "Descarga"])
 
     def salvar_csv(self, tensao):
+        if not self.arquivo_csv:
+            raise Exception("📁 O arquivo CSV precisa ser definido antes de salvar os dados.")
         t = time.time() - self.tempo_inicial
         with open(self.arquivo_csv, "a", newline='') as f:
             writer = csv.writer(f)
@@ -89,8 +90,10 @@ class ESPReader(threading.Thread):
                         self.modo = partes[1].split(":")[1].strip()
                         self.carga = partes[2].split(":")[1].strip()
                         self.descarga = partes[3].split(":")[1].strip()
-                        self.ultima_leitura = int(self.ultima_tensao * 1000)  # opcional: converter pra mV
-                        self.salvar_csv(self.ultima_tensao)
+                        self.ultima_leitura = int(self.ultima_tensao * 1000)
+                        # Salva no CSV somente se definido
+                        if self.arquivo_csv:
+                            self.salvar_csv(self.ultima_tensao)
             except Exception:
                 pass
 

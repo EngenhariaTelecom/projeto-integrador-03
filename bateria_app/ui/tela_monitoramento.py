@@ -1,3 +1,4 @@
+# ui/tela_monitoramento.py
 import ttkbootstrap as tb
 from ttkbootstrap.constants import *
 

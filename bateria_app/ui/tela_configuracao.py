@@ -151,9 +151,10 @@ class TelaConfiguracao(ttk.Frame):
             "dados_bateria": self.dados_bateria
         }
 
-        # Inicia ESPReader
+        # Inicia ESPReader e define CSV
         try:
-            self.controller.esp_reader = ESPReader(porta)
+            self.controller.esp_reader = ESPReader(porta=porta)
+            self.controller.esp_reader.definir_csv(csv_file)  # define CSV dinamicamente
             self.controller.esp_reader.start()
         except Exception as e:
             print("Erro iniciando ESPReader:", e)
