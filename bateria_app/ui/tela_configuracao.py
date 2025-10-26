@@ -32,7 +32,7 @@ class TelaConfiguracao(ttk.Frame):
         self.portas_disponiveis = self._listar_portas_usb()
         self.porta_entry = AutocompleteEntry(
             self.frame_porta,
-            autocomplete_list=self.portas_disponiveis,
+            autocomplete_list=[p.split(" - ")[0] for p in self.portas_disponiveis],
             placeholder="Selecione ou digite a porta",
             bootstyle="primary",
             textvariable=self.porta_var,
@@ -66,7 +66,7 @@ class TelaConfiguracao(ttk.Frame):
         # Botões de navegação
         self.frame_botoes = ttk.Frame(container)
         self.frame_botoes.pack(pady=20)
-        ttk.Button(self.frame_botoes, text="Voltar", bootstyle=WARNING, command=lambda: controller.show_frame("TelaSelecao")).pack(side="left", padx=5)
+        ttk.Button(self.frame_botoes, text="Voltar", bootstyle=WARNING, command=lambda: controller.show_frame("TelaInicial")).pack(side="left", padx=5)
         ttk.Button(self.frame_botoes, text="Iniciar Simulação", bootstyle=SUCCESS, command=self._iniciar_simulacao).pack(side="left", padx=5)
 
         # Inicializa ESP como None
@@ -85,7 +85,9 @@ class TelaConfiguracao(ttk.Frame):
         self._atualizar_frame_bateria()
 
     def _listar_portas_usb(self):
-        portas = [p.device for p in serial.tools.list_ports.comports()]
+        portas = []
+        for p in serial.tools.list_ports.comports():
+            portas.append(f"{p.device} - {p.description}")
         return portas if portas else []
 
     def _selecionar_porta(self, porta):
