@@ -115,7 +115,7 @@ class TelaMonitoramento(tb.Frame):
         # -------------------------
         # Atualização periódica
         # -------------------------
-        self.ani = FuncAnimation(self.fig, self.atualizar_grafico, interval=1000)
+        self.ani = FuncAnimation(self.fig, self.atualizar_grafico, interval=1000, cache_frame_data=False)
         self.atualizar_labels()
 
     # =========================
