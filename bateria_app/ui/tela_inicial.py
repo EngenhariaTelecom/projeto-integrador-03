@@ -12,13 +12,13 @@ class TelaInicial(tb.Frame):
 
         tb.Label(
             container,
-            text="🔋 Monitor de Bateria",
+            text="🖥️ Monitor de Bateria",
             font=("Segoe UI", 30, "bold")
         ).pack(pady=(0, 50))
 
         tb.Button(
             container,
-            text="⚡ Novo Teste",
+            text="⚡ Iniciar Teste",
             bootstyle=SUCCESS,
             width=20,
             padding=10,
@@ -27,7 +27,7 @@ class TelaInicial(tb.Frame):
 
         tb.Button(
             container,
-            text="📜 Ver Histórico",
+            text="📚 Ver Histórico",
             bootstyle=INFO,
             width=20,
             padding=10,

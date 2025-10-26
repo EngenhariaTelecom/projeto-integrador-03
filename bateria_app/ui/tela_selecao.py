@@ -17,7 +17,7 @@ class TelaSelecao(ttk.Frame):
         container.pack(pady=20, padx=20)
 
         # Título
-        ttk.Label(container, text="🔋 Seleção de Bateria", font=("Segoe UI", 24, "bold")).pack(pady=(0,20))
+        ttk.Label(container, text="⚡ Seleção de Bateria", font=("Segoe UI", 24, "bold")).pack(pady=(0,20))
         ttk.Label(container, text="Digite ou selecione uma bateria:", font=("Segoe UI", 14)).pack(pady=(0,20))
 
         # Carrega baterias
