@@ -5,6 +5,7 @@ import tkinter as tk
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 from ui.autocomplete import AutocompleteEntry
+from ui.tela_configuracao import TelaConfiguracao
 
 class TelaSelecao(ttk.Frame):
     def __init__(self, parent, controller):
@@ -140,7 +141,6 @@ class TelaSelecao(ttk.Frame):
             self.dados_bateria = self.baterias_map.get(nome, {})
 
         # Integração com TelaConfiguracao
-        from ui.tela_configuracao import TelaConfiguracao
         config_frame = self.controller.frames.get("TelaConfiguracao")
         if config_frame is None:
             config_frame = TelaConfiguracao(

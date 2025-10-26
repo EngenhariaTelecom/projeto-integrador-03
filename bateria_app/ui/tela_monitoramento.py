@@ -1,4 +1,3 @@
-# ui/tela_monitoramento.py
 import ttkbootstrap as tb
 from ttkbootstrap.constants import *
 
@@ -6,7 +5,7 @@ class TelaMonitoramento(tb.Frame):
     """
     Tela de monitoramento da bateria.
     Atualiza leitura e tensão em tempo real de forma segura,
-    mas não inicializa nem depende do ESPReader.
+    opcionalmente com ESPReader, mas não depende dele.
     """
 
     def __init__(self, parent, controller):
@@ -35,13 +34,19 @@ class TelaMonitoramento(tb.Frame):
         self.tipo_label = tb.Label(conteudo, text="Tipo: ---")
         self.tipo_label.pack(pady=(0,20))
 
-        # Labels de leitura simulados
+        # Labels de leitura
         self.leitura_label = tb.Label(conteudo, text="Leitura: --")
         self.leitura_label.pack(pady=5)
         self.tensao_label = tb.Label(conteudo, text="Tensão: -- V")
         self.tensao_label.pack(pady=5)
+        self.modo_label = tb.Label(conteudo, text="Modo: --")
+        self.modo_label.pack(pady=5)
+        self.carga_label = tb.Label(conteudo, text="Carga: --")
+        self.carga_label.pack(pady=5)
+        self.descarga_label = tb.Label(conteudo, text="Descarga: --")
+        self.descarga_label.pack(pady=5)
 
-        # Botão de voltar para Tela Inicial
+        # Botão de voltar
         tb.Button(
             conteudo,
             text="⬅️ Voltar para Tela Inicial",
@@ -49,27 +54,19 @@ class TelaMonitoramento(tb.Frame):
             command=lambda: controller.show_frame("TelaInicial")
         ).pack(pady=40)
 
-        # Inicia loop de atualização segura
+        # Inicia loop de atualização
         self.atualizar_labels()
 
     def atualizar_dados(self, dados):
         """Atualiza os labels com dados da simulação"""
         self.simulacao_dados = dados
 
-        bateria = dados.get("dados_bateria", {})
-        self.bateria_label.config(text=f"Bateria: {bateria.get('nome','---')}")
-        self.capacidade_label.config(text=f"Capacidade: {bateria.get('capacidade','---')}")
-        self.porta_label.config(text=f"Porta: {dados.get('porta','---')}")
-        self.csv_label.config(text=f"CSV: {dados.get('csv','---')}")
-        tipo = dados.get("tipo","---")
-        ciclos = dados.get("ciclos",1)
-        self.tipo_label.config(text=f"Tipo: {tipo}, Ciclos: {ciclos}")
-
     def atualizar_labels(self):
         """
-        Atualiza labels periodicamente sem acessar ESPReader diretamente.
+        Atualiza labels periodicamente.
+        Usa dados simulados e, se existir, ESPReader.
         """
-        # Apenas atualiza valores simulados se existirem
+        # Atualiza dados da simulação
         dados = self.simulacao_dados
         bateria = dados.get("dados_bateria", {})
         self.bateria_label.config(text=f"Bateria: {bateria.get('nome','---')}")
@@ -80,9 +77,22 @@ class TelaMonitoramento(tb.Frame):
         ciclos = dados.get("ciclos",1)
         self.tipo_label.config(text=f"Tipo: {tipo}, Ciclos: {ciclos}")
 
-        # Atualiza labels de leitura/tensão com valores padrão
-        self.leitura_label.config(text="Leitura: --")
-        self.tensao_label.config(text="Tensão: -- V")
+        # Atualiza valores do ESPReader se existir
+        esp = getattr(self.controller, "esp_reader", None)
+        if esp and esp.running:
+            if esp.ultima_tensao is not None:
+                self.leitura_label.config(text=f"Leitura: {esp.ultima_leitura}")
+                self.tensao_label.config(text=f"Tensão: {esp.ultima_tensao:.3f} V")
+                self.modo_label.config(text=f"Modo: {esp.modo}")
+                self.carga_label.config(text=f"Carga: {esp.carga}")
+                self.descarga_label.config(text=f"Descarga: {esp.descarga}")
+        else:
+            # Valores padrões se ESPReader não estiver ativo
+            self.leitura_label.config(text="Leitura: --")
+            self.tensao_label.config(text="Tensão: -- V")
+            self.modo_label.config(text="Modo: --")
+            self.carga_label.config(text="Carga: --")
+            self.descarga_label.config(text="Descarga: --")
 
-        # Reexecuta após 1 segundo
+        # Reexecuta a cada 1 segundo
         self.after(1000, self.atualizar_labels)

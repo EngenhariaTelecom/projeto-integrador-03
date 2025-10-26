@@ -7,6 +7,7 @@ from ui.tela_configuracao import TelaConfiguracao
 from ui.tela_monitoramento import TelaMonitoramento
 from ui.tela_ciclos import TelaCiclos
 from ui.tela_historico import TelaHistorico
+from tkinter import PhotoImage
 
 class BatteryApp(tb.Window):
     def __init__(self):
@@ -18,7 +19,6 @@ class BatteryApp(tb.Window):
         caminho_icone = os.path.join(os.path.dirname(__file__), "..", "assets", "icons", "icon.png")
         caminho_icone = os.path.abspath(caminho_icone)
         try:
-            from tkinter import PhotoImage
             icon_image = PhotoImage(file=caminho_icone)
             self.iconphoto(False, icon_image)
         except Exception as e:

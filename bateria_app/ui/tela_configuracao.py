@@ -7,6 +7,7 @@ from ttkbootstrap.constants import *
 import threading
 import serial.tools.list_ports
 from ui.autocomplete import AutocompleteEntry
+from core.monitor import ESPReader
 
 class TelaConfiguracao(ttk.Frame):
     def __init__(self, parent, controller, dados_bateria=None):
@@ -109,7 +110,6 @@ class TelaConfiguracao(ttk.Frame):
 
     def _thread_busca_esp(self):
         try:
-            from core.monitor import ESPReader
             esp = ESPReader()
             esp.conectar()
             if esp.running:
@@ -153,7 +153,6 @@ class TelaConfiguracao(ttk.Frame):
 
         # Inicia ESPReader
         try:
-            from core.monitor import ESPReader
             self.controller.esp_reader = ESPReader(porta)
             self.controller.esp_reader.start()
         except Exception as e:
