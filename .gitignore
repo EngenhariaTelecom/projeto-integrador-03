@@ -62,6 +62,6 @@ $RECYCLE.BIN/
 *.lnk
 
 ### Ignorar dados gerados ###
-assets/dados/
+bateria_app/assets/dados/
 
 # End of https://www.toptal.com/developers/gitignore/api/windows,linux,visualstudiocode
