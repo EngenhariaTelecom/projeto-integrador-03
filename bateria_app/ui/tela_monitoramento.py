@@ -25,11 +25,7 @@ class TelaMonitoramento(tb.Frame):
         self.dados_tensao = deque(maxlen=self.MAX_PONTOS)
         self.dados_tempo = deque(maxlen=self.MAX_PONTOS)
         self.tempo_inicial = time.time()
-
-        # Pasta CSV
-        dados = getattr(controller, "simulacao_dados", {})
-        self.csv_file = dados.get("csv", "assets/dados/dados_bateria.csv")
-        self._inicializar_csv()
+        self.csv_file = None  # será atualizado dinamicamente
 
         # =========================
         # Layout principal
@@ -54,7 +50,6 @@ class TelaMonitoramento(tb.Frame):
             lbl.grid(row=0, column=i, padx=12)
         frame_info.grid_columnconfigure(tuple(range(len(info_labels))), weight=1)
 
-        # salvar referências
         self.bateria_label, self.capacidade_label, self.tipo_label, self.porta_label, self.csv_label = info_labels
 
         # -------------------------
@@ -66,12 +61,12 @@ class TelaMonitoramento(tb.Frame):
             frame_tensao,
             text="Tensão: -- V",
             font=("Segoe UI", 22, "bold"),
-            foreground="#4CAF50"  # verde
+            foreground="#4CAF50"
         )
         self.tensao_label.pack(anchor="center")
 
         # -------------------------
-        # Modo / Carga / Descarga (centralizado)
+        # Modo / Carga / Descarga
         # -------------------------
         frame_status = tb.Frame(conteudo)
         frame_status.pack(fill="x", pady=(0,10))
@@ -82,7 +77,6 @@ class TelaMonitoramento(tb.Frame):
         self.modo_label.grid(row=0, column=0, padx=10)
         self.carga_label.grid(row=0, column=1, padx=10)
         self.descarga_label.grid(row=0, column=2, padx=10)
-
         frame_status.grid_columnconfigure((0,1,2), weight=1)
 
         # -------------------------
@@ -99,7 +93,7 @@ class TelaMonitoramento(tb.Frame):
         self.canvas.get_tk_widget().pack(fill="both", expand=True, pady=(0,10))
 
         # -------------------------
-        # Botões (agora abaixo do gráfico)
+        # Botões
         # -------------------------
         frame_botoes = tb.Frame(conteudo)
         frame_botoes.pack(pady=(10,0))
@@ -113,6 +107,19 @@ class TelaMonitoramento(tb.Frame):
         self.btn_desativar.grid(row=0, column=3, padx=5)
 
         # -------------------------
+        # Botão voltar
+        # -------------------------
+        frame_voltar = tb.Frame(conteudo)
+        frame_voltar.pack(pady=(15, 5))
+        tb.Button(
+            frame_voltar,
+            text="← Voltar à Tela Inicial",
+            bootstyle="secondary-outline",
+            width=25,
+            command=lambda: controller.show_frame("TelaInicial")
+        ).pack()
+
+        # -------------------------
         # Atualização periódica
         # -------------------------
         self.ani = FuncAnimation(self.fig, self.atualizar_grafico, interval=1000, cache_frame_data=False)
@@ -122,6 +129,8 @@ class TelaMonitoramento(tb.Frame):
     # CSV
     # =========================
     def _inicializar_csv(self):
+        if not self.csv_file:
+            return
         pasta = os.path.dirname(self.csv_file)
         if not os.path.exists(pasta):
             os.makedirs(pasta)
@@ -131,6 +140,8 @@ class TelaMonitoramento(tb.Frame):
                 writer.writerow(["Tempo (s)", "Tensao (V)", "Modo", "Carga", "Descarga"])
 
     def salvar_csv(self, t, tensao, modo, carga, descarga):
+        if not self.csv_file:
+            return
         with open(self.csv_file, "a", newline='') as f:
             writer = csv.writer(f)
             writer.writerow([f"{t:.1f}", f"{tensao:.3f}", modo, carga, descarga])
@@ -166,13 +177,19 @@ class TelaMonitoramento(tb.Frame):
     # =========================
     def atualizar_labels(self):
         dados = getattr(self.controller, "simulacao_dados", {})
+
+        # Atualiza CSV dinamicamente quando a simulação iniciar
+        if "csv" in dados:
+            if self.csv_file != dados["csv"]:
+                self.csv_file = dados["csv"]
+                self._inicializar_csv()
+
         bateria = dados.get("dados_bateria", {})
         self.bateria_label.config(text=f"Bateria: {bateria.get('nome','---')}")
         self.capacidade_label.config(text=f"Capacidade: {bateria.get('capacidade','---')}")
         self.porta_label.config(text=f"Porta: {dados.get('porta','---')}")
         
-        # Caminho CSV relativo
-        rel_csv = os.path.relpath(self.csv_file, os.getcwd())
+        rel_csv = os.path.relpath(self.csv_file, os.getcwd()) if self.csv_file else "---"
         self.csv_label.config(text=f"CSV: {rel_csv}")
         
         tipo = dados.get("tipo","---")
@@ -186,7 +203,6 @@ class TelaMonitoramento(tb.Frame):
             self.carga_label.config(text=f"Carga: {esp.carga}")
             self.descarga_label.config(text=f"Descarga: {esp.descarga}")
 
-            # Alternância de botões
             if esp.carga == "ON":
                 self.btn_carga.grid_remove()
                 self.btn_descarga.grid()
@@ -209,7 +225,7 @@ class TelaMonitoramento(tb.Frame):
             self.dados_tempo.append(t)
             self.dados_tensao.append(esp.ultima_tensao)
             self.salvar_csv(t, esp.ultima_tensao, esp.modo, esp.carga, esp.descarga)
-
+        
         if len(self.dados_tempo) > 0:
             self.ax.clear()
             self.ax.plot(self.dados_tempo, self.dados_tensao, color='tab:blue')
