@@ -1,40 +1,34 @@
 # core/historico.py
 import csv
 import os
-from collections import deque
-import time
 
 class Historico:
     """
-    Lê dados da ESPReader ou de um CSV e fornece listas de dados para gráfico.
+    Manipula arquivos CSV contendo dados de tensão ao longo do tempo.
+    Responsável por carregar e preparar dados para o gráfico.
     """
-    def __init__(self, esp_reader=None, arquivo_csv=None, max_pontos=300):
-        self.esp = esp_reader
-        self.arquivo_csv = arquivo_csv
-        self.max_pontos = max_pontos
-        self.tempo = deque(maxlen=max_pontos)
-        self.tensao = deque(maxlen=max_pontos)
+    def __init__(self, pasta_dados="assets/dados"):
+        self.pasta = pasta_dados
+        if not os.path.exists(self.pasta):
+            os.makedirs(self.pasta)
 
-    def atualizar(self):
-        """Atualiza dados do ESPReader ou CSV"""
-        if self.esp and self.esp.ultima_tensao is not None:
-            t = time.time()
-            self.tempo.append(t)
-            self.tensao.append(self.esp.ultima_tensao)
-        elif self.arquivo_csv:
-            self._ler_csv()
+    def listar_csvs(self):
+        """Retorna uma lista dos arquivos CSV disponíveis na pasta de dados."""
+        return [f for f in os.listdir(self.pasta) if f.lower().endswith(".csv")]
 
-    def _ler_csv(self):
-        """Carrega CSV completo"""
-        if not os.path.exists(self.arquivo_csv):
-            return
-        with open(self.arquivo_csv, "r") as f:
-            reader = csv.DictReader(f)
-            self.tempo.clear()
-            self.tensao.clear()
-            for row in reader:
-                self.tempo.append(float(row["Tempo (s)"]))
-                self.tensao.append(float(row["Tensao (V)"]))
-
-    def get_dados(self):
-        return list(self.tempo), list(self.tensao)
+    def carregar_dados(self, nome_arquivo):
+        """
+        Carrega dados de um arquivo CSV e retorna listas de tempo e tensão.
+        Retorna ([], []) se o arquivo estiver vazio ou inválido.
+        """
+        caminho = os.path.join(self.pasta, nome_arquivo)
+        tempos, tensoes = [], []
+        try:
+            with open(caminho, "r") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    tempos.append(float(row.get("Tempo (s)", 0)))
+                    tensoes.append(float(row.get("Tensao (V)", 0)))
+        except Exception as e:
+            print(f"[ERRO] Falha ao carregar {nome_arquivo}: {e}")
+        return tempos, tensoes

@@ -1,126 +1,192 @@
+# ui/tela_monitoramento.py
 import ttkbootstrap as tb
 from ttkbootstrap.constants import *
-from tkinter import messagebox
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.animation import FuncAnimation
+from collections import deque
+import time
+import os
+import csv
 
 class TelaMonitoramento(tb.Frame):
     """
-    Tela de monitoramento da bateria.
-    Atualiza leitura e tensão em tempo real de forma segura.
-    Possui botões para:
-      - Iniciar Carga / Iniciar Descarga
-      - Alternar Modo Auto/Manual
-      - Desativar Tudo
+    Monitoramento de bateria com gráfico em tempo real
+    integrado ao Tkinter, com CSV automático.
     """
-
     def __init__(self, parent, controller):
         super().__init__(parent)
         self.controller = controller
-        self.simulacao_dados = getattr(controller, "simulacao_dados", {})
 
+        # =========================
+        # Configurações do gráfico e dados
+        # =========================
+        self.MAX_PONTOS = 300
+        self.dados_tensao = deque(maxlen=self.MAX_PONTOS)
+        self.dados_tempo = deque(maxlen=self.MAX_PONTOS)
+        self.tempo_inicial = time.time()
+
+        # Pasta CSV
+        dados = getattr(controller, "simulacao_dados", {})
+        self.csv_file = dados.get("csv", "assets/dados/dados_bateria.csv")
+        self._inicializar_csv()
+
+        # =========================
         # Layout principal
-        self.grid_rowconfigure(0, weight=1)
-        self.grid_columnconfigure(0, weight=1)
+        # =========================
         conteudo = tb.Frame(self)
-        conteudo.grid(row=0, column=0, sticky="nsew")
+        conteudo.pack(padx=10, pady=10, fill="both", expand=True)
 
-        tb.Label(conteudo, text="📊 Monitoramento de Bateria", font=("Helvetica", 18, "bold")).pack(pady=20)
+        # -------------------------
+        # Top info (lado a lado, centralizado)
+        # -------------------------
+        frame_info = tb.Frame(conteudo)
+        frame_info.pack(fill="x", pady=(0,5))
 
-        # Labels principais
-        self.bateria_label = tb.Label(conteudo, text="Bateria: ---"); self.bateria_label.pack()
-        self.capacidade_label = tb.Label(conteudo, text="Capacidade: ---"); self.capacidade_label.pack()
-        self.porta_label = tb.Label(conteudo, text="Porta: ---"); self.porta_label.pack()
-        self.csv_label = tb.Label(conteudo, text="CSV: ---"); self.csv_label.pack()
-        self.tipo_label = tb.Label(conteudo, text="Tipo: ---"); self.tipo_label.pack(pady=(0,20))
+        info_labels = [
+            tb.Label(frame_info, text="Bateria: ---"),
+            tb.Label(frame_info, text="Capacidade: ---"),
+            tb.Label(frame_info, text="Tipo: ---"),
+            tb.Label(frame_info, text="Porta: ---"),
+            tb.Label(frame_info, text="CSV: ---"),
+        ]
+        for i, lbl in enumerate(info_labels):
+            lbl.grid(row=0, column=i, padx=12)
+        frame_info.grid_columnconfigure(tuple(range(len(info_labels))), weight=1)
 
-        # Labels de leitura
-        self.leitura_label = tb.Label(conteudo, text="Leitura: --"); self.leitura_label.pack(pady=5)
-        self.tensao_label = tb.Label(conteudo, text="Tensão: -- V"); self.tensao_label.pack(pady=5)
-        self.modo_label = tb.Label(conteudo, text="Modo: --"); self.modo_label.pack(pady=5)
-        self.carga_label = tb.Label(conteudo, text="Carga: --"); self.carga_label.pack(pady=5)
-        self.descarga_label = tb.Label(conteudo, text="Descarga: --"); self.descarga_label.pack(pady=5)
+        # salvar referências
+        self.bateria_label, self.capacidade_label, self.tipo_label, self.porta_label, self.csv_label = info_labels
 
-        # Botões de ação
-        self.frame_botoes = tb.Frame(conteudo)
-        self.frame_botoes.pack(pady=20)
+        # -------------------------
+        # Tensão destacada (centralizada e verde)
+        # -------------------------
+        frame_tensao = tb.Frame(conteudo)
+        frame_tensao.pack(fill="x", pady=(10,10))
+        self.tensao_label = tb.Label(
+            frame_tensao,
+            text="Tensão: -- V",
+            font=("Segoe UI", 22, "bold"),
+            foreground="#4CAF50"  # verde
+        )
+        self.tensao_label.pack(anchor="center")
 
-        self.btn_carga = tb.Button(self.frame_botoes, text="Iniciar Carga", bootstyle=SUCCESS, command=self.alternar_carga)
-        self.btn_descarga = tb.Button(self.frame_botoes, text="Iniciar Descarga", bootstyle=DANGER, command=self.alternar_descarga)
-        self.btn_modo = tb.Button(self.frame_botoes, text="Alternar Modo", bootstyle=INFO, command=self.alternar_modo)
-        self.btn_desativar = tb.Button(self.frame_botoes, text="Desativar Tudo", bootstyle=WARNING, command=self.desativar_tudo)
+        # -------------------------
+        # Modo / Carga / Descarga (centralizado)
+        # -------------------------
+        frame_status = tb.Frame(conteudo)
+        frame_status.pack(fill="x", pady=(0,10))
+        self.modo_label = tb.Label(frame_status, text="Modo: --")
+        self.carga_label = tb.Label(frame_status, text="Carga: --")
+        self.descarga_label = tb.Label(frame_status, text="Descarga: --")
 
+        self.modo_label.grid(row=0, column=0, padx=10)
+        self.carga_label.grid(row=0, column=1, padx=10)
+        self.descarga_label.grid(row=0, column=2, padx=10)
+
+        frame_status.grid_columnconfigure((0,1,2), weight=1)
+
+        # -------------------------
+        # Gráfico
+        # -------------------------
+        plt.style.use('dark_background')
+        self.fig, self.ax = plt.subplots(figsize=(8,3))
+        self.line, = self.ax.plot([], [], color='tab:blue')
+        self.ax.set_xlabel("Tempo (s)")
+        self.ax.set_ylabel("Tensão (V)")
+        self.ax.set_title("Tensão da Bateria em Tempo Real")
+        self.ax.grid(True)
+        self.canvas = FigureCanvasTkAgg(self.fig, master=conteudo)
+        self.canvas.get_tk_widget().pack(fill="both", expand=True, pady=(0,10))
+
+        # -------------------------
+        # Botões (agora abaixo do gráfico)
+        # -------------------------
+        frame_botoes = tb.Frame(conteudo)
+        frame_botoes.pack(pady=(10,0))
+        self.btn_carga = tb.Button(frame_botoes, text="▶️ Iniciar Carga", bootstyle=SUCCESS, command=self.iniciar_carga)
         self.btn_carga.grid(row=0, column=0, padx=5)
+        self.btn_descarga = tb.Button(frame_botoes, text="⚡ Iniciar Descarga", bootstyle=INFO, command=self.iniciar_descarga)
         self.btn_descarga.grid(row=0, column=1, padx=5)
-        self.btn_modo.grid(row=0, column=2, padx=5)
+        self.btn_alternar = tb.Button(frame_botoes, text="🤖 Alternar Modo", bootstyle=PRIMARY, command=self.alternar_modo)
+        self.btn_alternar.grid(row=0, column=2, padx=5)
+        self.btn_desativar = tb.Button(frame_botoes, text="⏹ Desativar Tudo", bootstyle=WARNING, command=self.desativar_tudo)
         self.btn_desativar.grid(row=0, column=3, padx=5)
 
-        # Botão de voltar
-        tb.Button(conteudo, text="⬅️ Voltar", bootstyle=SECONDARY,
-                  command=lambda: controller.show_frame("TelaInicial")).pack(pady=10)
-
-        # Atualiza interface a cada segundo
+        # -------------------------
+        # Atualização periódica
+        # -------------------------
+        self.ani = FuncAnimation(self.fig, self.atualizar_grafico, interval=1000)
         self.atualizar_labels()
 
-    # ===== Funções dos botões =====
+    # =========================
+    # CSV
+    # =========================
+    def _inicializar_csv(self):
+        pasta = os.path.dirname(self.csv_file)
+        if not os.path.exists(pasta):
+            os.makedirs(pasta)
+        if not os.path.exists(self.csv_file):
+            with open(self.csv_file, "w", newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(["Tempo (s)", "Tensao (V)", "Modo", "Carga", "Descarga"])
 
-    def alternar_carga(self):
+    def salvar_csv(self, t, tensao, modo, carga, descarga):
+        with open(self.csv_file, "a", newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow([f"{t:.1f}", f"{tensao:.3f}", modo, carga, descarga])
+
+    # =========================
+    # Botões
+    # =========================
+    def iniciar_carga(self):
         esp = getattr(self.controller, "esp_reader", None)
-        if not esp: return
+        if esp:
+            esp.carga = "ON"
+            esp.descarga = "OFF"
 
-        # Inicia carga e desativa descarga
-        esp.carga = "ON"
-        esp.descarga = "OFF"
-
-    def alternar_descarga(self):
+    def iniciar_descarga(self):
         esp = getattr(self.controller, "esp_reader", None)
-        if not esp: return
-
-        # Inicia descarga e desativa carga
-        esp.carga = "OFF"
-        esp.descarga = "ON"
+        if esp:
+            esp.descarga = "ON"
+            esp.carga = "OFF"
 
     def alternar_modo(self):
         esp = getattr(self.controller, "esp_reader", None)
-        if not esp: return
-
-        esp.modo = "MANUAL" if esp.modo == "AUTO" else "AUTO"
+        if esp:
+            esp.modo = "AUTO" if esp.modo == "MANUAL" else "MANUAL"
 
     def desativar_tudo(self):
         esp = getattr(self.controller, "esp_reader", None)
-        if not esp: return
+        if esp:
+            esp.carga = "OFF"
+            esp.descarga = "OFF"
 
-        esp.carga = "OFF"
-        esp.descarga = "OFF"
-
-    # ===== Atualização de labels =====
-
+    # =========================
+    # Atualização labels
+    # =========================
     def atualizar_labels(self):
-        dados = self.simulacao_dados
+        dados = getattr(self.controller, "simulacao_dados", {})
         bateria = dados.get("dados_bateria", {})
         self.bateria_label.config(text=f"Bateria: {bateria.get('nome','---')}")
         self.capacidade_label.config(text=f"Capacidade: {bateria.get('capacidade','---')}")
         self.porta_label.config(text=f"Porta: {dados.get('porta','---')}")
-        self.csv_label.config(text=f"CSV: {dados.get('csv','---')}")
+        
+        # Caminho CSV relativo
+        rel_csv = os.path.relpath(self.csv_file, os.getcwd())
+        self.csv_label.config(text=f"CSV: {rel_csv}")
+        
         tipo = dados.get("tipo","---")
         ciclos = dados.get("ciclos",1)
         self.tipo_label.config(text=f"Tipo: {tipo}, Ciclos: {ciclos}")
 
-        # Atualiza dados do ESPReader
         esp = getattr(self.controller, "esp_reader", None)
-        if esp and esp.running:
-            self.leitura_label.config(text=f"Leitura: {esp.ultima_leitura or '--'}")
-            self.tensao_label.config(text=f"Tensão: {esp.ultima_tensao:.3f} V" if esp.ultima_tensao else "Tensão: -- V")
+        if esp:
+            self.tensao_label.config(text=f"{esp.ultima_tensao:.3f} V" if esp.ultima_tensao else "Tensão: -- V")
             self.modo_label.config(text=f"Modo: {esp.modo}")
             self.carga_label.config(text=f"Carga: {esp.carga}")
             self.descarga_label.config(text=f"Descarga: {esp.descarga}")
-        else:
-            self.leitura_label.config(text="Leitura: --")
-            self.tensao_label.config(text="Tensão: -- V")
-            self.modo_label.config(text="Modo: --")
-            self.carga_label.config(text="Carga: --")
-            self.descarga_label.config(text="Descarga: --")
 
-        # Atualiza botoes de carga/descarga dinamicamente
-        if esp:
+            # Alternância de botões
             if esp.carga == "ON":
                 self.btn_carga.grid_remove()
                 self.btn_descarga.grid()
@@ -132,3 +198,24 @@ class TelaMonitoramento(tb.Frame):
                 self.btn_descarga.grid()
 
         self.after(1000, self.atualizar_labels)
+
+    # =========================
+    # Gráfico
+    # =========================
+    def atualizar_grafico(self, frame):
+        esp = getattr(self.controller, "esp_reader", None)
+        if esp and esp.ultima_tensao is not None:
+            t = time.time() - self.tempo_inicial
+            self.dados_tempo.append(t)
+            self.dados_tensao.append(esp.ultima_tensao)
+            self.salvar_csv(t, esp.ultima_tensao, esp.modo, esp.carga, esp.descarga)
+
+        if len(self.dados_tempo) > 0:
+            self.ax.clear()
+            self.ax.plot(self.dados_tempo, self.dados_tensao, color='tab:blue')
+            self.ax.set_xlabel("Tempo (s)")
+            self.ax.set_ylabel("Tensão (V)")
+            self.ax.set_title("Tensão da Bateria em Tempo Real")
+            self.ax.set_ylim(2.5, 4.5)
+            self.ax.grid(True)
+            self.canvas.draw()
