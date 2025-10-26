@@ -1,4 +1,4 @@
-# core/esp_backend.py
+# core/monitor.py
 import serial
 import serial.tools.list_ports
 import threading

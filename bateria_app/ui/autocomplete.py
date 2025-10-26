@@ -3,14 +3,15 @@ import tkinter as tk
 import ttkbootstrap as ttk
 
 class AutocompleteEntry(ttk.Entry):
-    def __init__(self, parent, autocomplete_list=None, placeholder="Digite aqui...", bootstyle=None, on_select_callback=None, *args, **kwargs):
-        # Aplica bootstyle padrão se não informado
+    def __init__(self, parent, autocomplete_list=None, placeholder="Digite aqui...", bootstyle=None,
+                 on_select_callback=None, max_height=10, *args, **kwargs):
         if bootstyle is None:
             bootstyle = "primary"
         super().__init__(parent, bootstyle=bootstyle, *args, **kwargs)
 
         self.parent = parent
         self.on_select_callback = on_select_callback
+        self.max_height = max_height
 
         # Lista de sugestões
         if autocomplete_list is None:
@@ -86,6 +87,9 @@ class AutocompleteEntry(ttk.Entry):
             self.listbox.delete(0, "end")
             for w in words:
                 self.listbox.insert("end", w)
+            # Ajusta a altura da listbox
+            altura = min(len(words), self.max_height)
+            self.listbox.config(height=altura)
         else:
             self.close_listbox()
 
@@ -124,13 +128,16 @@ class AutocompleteEntry(ttk.Entry):
         if self.listbox_up:
             return
 
-        self.listbox_frame = tk.Frame(self.parent)
-        self.listbox_frame.place(x=self.winfo_x(), y=self.winfo_y() + self.winfo_height(), width=self.winfo_width())
+        # Toplevel flutuante
+        self.listbox_frame = tk.Toplevel(self)
+        self.listbox_frame.wm_overrideredirect(True)  # sem bordas
+        x = self.winfo_rootx()
+        y = self.winfo_rooty() + self.winfo_height()
+        self.listbox_frame.wm_geometry(f"{self.winfo_width()}x100+{x}+{y}")  # altura inicial, ajustável
 
         self.scrollbar = tk.Scrollbar(self.listbox_frame, orient="vertical")
         self.listbox = tk.Listbox(
             self.listbox_frame,
-            height=3,
             yscrollcommand=self.scrollbar.set,
             background=self.bg_color,
             foreground=self.fg_color,
@@ -145,6 +152,7 @@ class AutocompleteEntry(ttk.Entry):
         self.listbox.bind("<Right>", self.selection)
 
         self.listbox_up = True
+
 
     def _select_current(self):
         sel = self.listbox.curselection()
