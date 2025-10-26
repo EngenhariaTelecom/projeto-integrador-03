@@ -1,6 +1,6 @@
 {
   "nome": "NiMH 1.2V",
-  "capacidade": "2000 mAh",
-  "tensao_carga": "1.45 V",
-  "tensao_descarga": "1.00 V"
+  "capacidade": "2000",
+  "tensao_carga": "1.45",
+  "tensao_descarga": "1.00"
 }

@@ -8,7 +8,7 @@ from ui.tela_historico import TelaHistorico
 
 class BatteryApp(tb.Window):
     def __init__(self):
-        super().__init__(themename="cyborg")
+        super().__init__(themename="superhero")
         self.title("Monitor de Bateria v1.0")
         self.geometry("1200x700")
 

@@ -1,6 +1,6 @@
 {
   "nome": "PSA 3.7 V",
-  "capacidade": "500 mAh",
-  "tensao_carga": "4.2 V",
-  "tensao_descarga": "3.0 V"
+  "capacidade": "500",
+  "tensao_carga": "4.2",
+  "tensao_descarga": "3.0"
 }
