@@ -84,6 +84,7 @@ class ESPReader(threading.Thread):
             try:
                 linha = self.ser.readline().decode(errors='ignore').strip()
                 if linha.startswith("Vbat:"):
+                    print(linha)
                     partes = linha.split("|")
                     if len(partes) == 4:
                         self.ultima_tensao = float(partes[0].split(":")[1].split("V")[0])
