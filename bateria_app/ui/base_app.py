@@ -1,5 +1,6 @@
 # ui/base_app.py
 import os
+import sys
 import ttkbootstrap as tb
 from ui.tela_inicial import TelaInicial
 from ui.tela_selecao import TelaSelecao
@@ -14,6 +15,9 @@ class BatteryApp(tb.Window):
         super().__init__(themename="cyborg")
         self.title("Monitor de Bateria v1.0")
         self.geometry("1200x700")
+
+        # Configura protocolo de fechamento
+        self.protocol("WM_DELETE_WINDOW", self.on_closing)
 
         # Ícone
         caminho_icone = os.path.join(os.path.dirname(__file__), "..", "assets", "icons", "icon.png")
@@ -63,9 +67,32 @@ class BatteryApp(tb.Window):
 
     def on_closing(self):
         """Encerra backend e fecha app"""
+        # Para ESPReader
         if self.esp_reader is not None:
             try:
                 self.esp_reader.parar()
-            except:
+            except Exception:
                 pass
-        self.destroy()
+
+        # Para frames que usam after ou matplotlib
+        for frame in self.frames.values():
+            try:
+                # Se o frame tiver animação, parar antes de destruir
+                if hasattr(frame, 'ani') and frame.ani.event_source:
+                    try:
+                        frame.ani.event_source.stop()
+                    except Exception:
+                        pass
+                frame.destroy()
+            except Exception:
+                pass
+
+        # Destroi a janela principal
+        try:
+            self.destroy()
+        except Exception:
+            pass
+
+        # Força saída total do Python
+        import os
+        os._exit(0)
