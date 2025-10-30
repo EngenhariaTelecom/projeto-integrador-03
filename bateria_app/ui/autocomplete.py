@@ -54,6 +54,9 @@ class AutocompleteEntry(ttk.Entry):
         self.sel_bg_color = style.lookup('TEntry', 'selectbackground') or "#0d6efd"
         self.sel_fg_color = style.lookup('TEntry', 'selectforeground') or "#ffffff"
 
+    # -------------------------
+    # Placeholder
+    # -------------------------
     def _set_placeholder(self, *args):
         if not self.var.get():
             self._has_placeholder = True
@@ -66,6 +69,9 @@ class AutocompleteEntry(ttk.Entry):
             self.config(foreground=self.fg_color)
             self._has_placeholder = False
 
+    # -------------------------
+    # Atualização da lista
+    # -------------------------
     def show_all(self, event=None):
         self._clear_placeholder()
         self.changed()
@@ -97,11 +103,28 @@ class AutocompleteEntry(ttk.Entry):
         text_l = text.lower()
         return [w for w in self.autocomplete_list if text_l in w.lower()]
 
+    # -------------------------
+    # Seleção de item
+    # -------------------------
     def selection(self, event):
         if self.listbox_up and self.listbox.curselection():
             self._select_current()
         return "break"
 
+    def _select_current(self):
+        sel = self.listbox.curselection()
+        if sel:
+            self._clear_placeholder()
+            self.var.set(self.listbox.get(sel[0]))
+            self.icursor("end")
+            self.focus_set()  # mantém o foco para continuar digitando
+            self.close_listbox()
+            if self.on_select_callback:
+                self.on_select_callback(self.var.get())
+
+    # -------------------------
+    # Navegação com setas
+    # -------------------------
     def move_up(self, event):
         if not self.listbox_up:
             return "break"
@@ -124,16 +147,18 @@ class AutocompleteEntry(ttk.Entry):
             self.listbox.activate(idx + 1)
         return "break"
 
+    # -------------------------
+    # Listbox flutuante
+    # -------------------------
     def open_listbox(self):
         if self.listbox_up:
             return
 
-        # Toplevel flutuante
         self.listbox_frame = tk.Toplevel(self)
-        self.listbox_frame.wm_overrideredirect(True)  # sem bordas
+        self.listbox_frame.wm_overrideredirect(True)
         x = self.winfo_rootx()
         y = self.winfo_rooty() + self.winfo_height()
-        self.listbox_frame.wm_geometry(f"{self.winfo_width()}x100+{x}+{y}")  # altura inicial, ajustável
+        self.listbox_frame.wm_geometry(f"{self.winfo_width()}x100+{x}+{y}")
 
         self.scrollbar = tk.Scrollbar(self.listbox_frame, orient="vertical")
         self.listbox = tk.Listbox(
@@ -152,16 +177,6 @@ class AutocompleteEntry(ttk.Entry):
         self.listbox.bind("<Right>", self.selection)
 
         self.listbox_up = True
-
-
-    def _select_current(self):
-        sel = self.listbox.curselection()
-        if sel:
-            self.var.set(self.listbox.get(sel[0]))
-            self.close_listbox()
-            self.icursor("end")
-            if self.on_select_callback:
-                self.on_select_callback(self.var.get())
 
     def close_listbox(self):
         if self.listbox_up:
