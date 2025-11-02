@@ -105,8 +105,6 @@ class TelaMonitoramento(tb.Frame):
         self.btn_carga.grid(row=0, column=0, padx=5)
         self.btn_descarga = tb.Button(frame_botoes, text="⚡ Iniciar Descarga", bootstyle=INFO, command=self.iniciar_descarga)
         self.btn_descarga.grid(row=0, column=1, padx=5)
-        self.btn_alternar = tb.Button(frame_botoes, text="🤖 Alternar Modo", bootstyle=PRIMARY, command=self.alternar_modo)
-        self.btn_alternar.grid(row=0, column=2, padx=5)
         self.btn_desativar = tb.Button(frame_botoes, text="⏹ Desativar Tudo", bootstyle=WARNING, command=self.desativar_tudo)
         self.btn_desativar.grid(row=0, column=3, padx=5)
 
@@ -150,12 +148,12 @@ class TelaMonitoramento(tb.Frame):
                 esp.bateria_controller.alternar_modo()
 
             # 🔹 Esconde todos os botões de controle
-            for btn in [self.btn_carga, self.btn_descarga, self.btn_alternar, self.btn_desativar]:
+            for btn in [self.btn_carga, self.btn_descarga, self.btn_desativar]:
                 btn.grid_remove()
         else:
             # 🔹 Modo manual
             self.modo_ciclos = False
-            for btn in [self.btn_carga, self.btn_descarga, self.btn_alternar, self.btn_desativar]:
+            for btn in [self.btn_carga, self.btn_descarga, self.btn_desativar]:
                 btn.grid()
 
 
