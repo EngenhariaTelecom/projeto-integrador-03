@@ -1,3 +1,4 @@
+# ui/tela_monitoramento.py
 import ttkbootstrap as tb
 from ttkbootstrap.constants import *
 import matplotlib.pyplot as plt
@@ -7,17 +8,22 @@ from collections import deque
 import time
 import os
 import csv
+from tkinter import messagebox
+import json
 
 class TelaMonitoramento(tb.Frame):
     """
     Monitoramento de bateria com gráfico em tempo real
-    integrado ao Tkinter, com CSV automático e proteção
-    contra erros ao fechar a aplicação.
+    integrado ao Tkinter, com CSV automático, proteção
+    contra erros ao fechar a aplicação, e suporte a log
+    para retomada de simulação.
     """
+    LOG_FILE = os.path.join(os.getcwd(), "assets", "dados", "simulacao_log.json")
+
     def __init__(self, parent, controller):
         super().__init__(parent)
         self.controller = controller
-        self.modo_ciclos = False  # 🔹 Define se está em teste de ciclos
+        self.modo_ciclos = False
 
         # =========================
         # Configurações do gráfico e dados
@@ -36,9 +42,7 @@ class TelaMonitoramento(tb.Frame):
         conteudo = tb.Frame(self)
         conteudo.pack(padx=10, pady=10, fill="both", expand=True)
 
-        # -------------------------
         # Top info (centralizado)
-        # -------------------------
         frame_info = tb.Frame(conteudo)
         frame_info.pack(fill="x", pady=(0,5))
 
@@ -52,12 +56,9 @@ class TelaMonitoramento(tb.Frame):
         for i, lbl in enumerate(info_labels):
             lbl.grid(row=0, column=i, padx=12)
         frame_info.grid_columnconfigure(tuple(range(len(info_labels))), weight=1)
-
         self.bateria_label, self.capacidade_label, self.tipo_label, self.porta_label, self.csv_label = info_labels
 
-        # -------------------------
         # Tensão destacada
-        # -------------------------
         frame_tensao = tb.Frame(conteudo)
         frame_tensao.pack(fill="x", pady=(10,10))
         self.tensao_label = tb.Label(
@@ -68,9 +69,7 @@ class TelaMonitoramento(tb.Frame):
         )
         self.tensao_label.pack(anchor="center")
 
-        # -------------------------
         # Modo / Carga / Descarga
-        # -------------------------
         frame_status = tb.Frame(conteudo)
         frame_status.pack(fill="x", pady=(0,10))
         self.modo_label = tb.Label(frame_status, text="Modo: --")
@@ -81,9 +80,7 @@ class TelaMonitoramento(tb.Frame):
         self.descarga_label.grid(row=0, column=2, padx=10)
         frame_status.grid_columnconfigure((0,1,2), weight=1)
 
-        # -------------------------
         # Gráfico
-        # -------------------------
         plt.style.use('dark_background')
         self.fig, self.ax = plt.subplots(figsize=(8,3))
         self.line, = self.ax.plot([], [], color='tab:blue')
@@ -94,12 +91,10 @@ class TelaMonitoramento(tb.Frame):
         self.canvas = FigureCanvasTkAgg(self.fig, master=conteudo)
         self.canvas.get_tk_widget().pack(fill="both", expand=True, pady=(0,10))
 
-        # -------------------------
         # Botões
-        # -------------------------
         frame_botoes = tb.Frame(conteudo)
         frame_botoes.pack(pady=(10,0))
-        self.frame_botoes = frame_botoes  # 🔹 Referência para esconder/mostrar em ciclos
+        self.frame_botoes = frame_botoes
 
         self.btn_carga = tb.Button(frame_botoes, text="▶️ Iniciar Carga", bootstyle=SUCCESS, command=self.iniciar_carga)
         self.btn_carga.grid(row=0, column=0, padx=5)
@@ -108,9 +103,7 @@ class TelaMonitoramento(tb.Frame):
         self.btn_desativar = tb.Button(frame_botoes, text="⏹ Desativar Tudo", bootstyle=WARNING, command=self.desativar_tudo)
         self.btn_desativar.grid(row=0, column=3, padx=5)
 
-        # -------------------------
         # Botão de voltar
-        # -------------------------
         frame_voltar = tb.Frame(conteudo)
         frame_voltar.pack(pady=(15, 5))
         tb.Button(
@@ -121,41 +114,40 @@ class TelaMonitoramento(tb.Frame):
             command=lambda: self.voltar_tela_inicial()
         ).pack()
 
-        # -------------------------
         # Atualização periódica
-        # -------------------------
         self.ani = FuncAnimation(self.fig, self.atualizar_grafico, interval=1000, cache_frame_data=False)
         self.atualizar_labels()
 
-
     # =========================
-    # Atualizar dados (chamado por show_frame)
+    # Atualizar dados
     # =========================
     def atualizar_dados(self, dados):
-        """
-        Atualiza dados da simulação e define comportamento visual
-        conforme o tipo de teste (manual ou ciclos).
-        """
         self.controller.simulacao_dados = dados
         tipo = dados.get("tipo", "")
         esp = getattr(self.controller, "esp_reader", None)
 
+        # Define CSV
+        if "csv" in dados:
+            self.csv_file = dados["csv"]
+            self._inicializar_csv()
+            self._carregar_csv_existente()
+
+        # Log
+        self._criar_log()
+
         if tipo.lower() == "ciclos":
-            # 🔹 Entra em modo ciclos automático
             self.modo_ciclos = True
             if esp:
                 esp.modo = "AUTO"
                 esp.bateria_controller.alternar_modo()
-
-            # 🔹 Esconde todos os botões de controle
             for btn in [self.btn_carga, self.btn_descarga, self.btn_desativar]:
                 btn.grid_remove()
         else:
-            # 🔹 Modo manual
             self.modo_ciclos = False
+            if esp:
+                esp.modo = "MANUAL"
             for btn in [self.btn_carga, self.btn_descarga, self.btn_desativar]:
                 btn.grid()
-
 
     # =========================
     # CSV
@@ -164,12 +156,31 @@ class TelaMonitoramento(tb.Frame):
         if not self.csv_file:
             return
         pasta = os.path.dirname(self.csv_file)
-        if not os.path.exists(pasta):
-            os.makedirs(pasta)
+        os.makedirs(pasta, exist_ok=True)
         if not os.path.exists(self.csv_file):
             with open(self.csv_file, "w", newline='') as f:
                 writer = csv.writer(f)
                 writer.writerow(["Tempo (s)", "Tensao (V)", "Modo", "Carga", "Descarga"])
+
+    def _carregar_csv_existente(self):
+        if not self.csv_file or not os.path.exists(self.csv_file):
+            return
+        with open(self.csv_file, "r", newline='') as f:
+            reader = csv.DictReader(f)
+            self.dados_tempo.clear()
+            self.dados_tensao.clear()
+            for row in reader:
+                try:
+                    t = float(row["Tempo (s)"])
+                    v = float(row["Tensao (V)"])
+                    self.dados_tempo.append(t)
+                    self.dados_tensao.append(v)
+                except Exception:
+                    continue
+        if self.dados_tempo:
+            self.tempo_inicial = time.time() - self.dados_tempo[-1]
+        else:
+            self.tempo_inicial = time.time()
 
     def salvar_csv(self, t, tensao, modo, carga, descarga):
         if not self.csv_file:
@@ -181,6 +192,20 @@ class TelaMonitoramento(tb.Frame):
         except Exception:
             pass
 
+    # =========================
+    # Log
+    # =========================
+    def _criar_log(self):
+        os.makedirs(os.path.dirname(self.LOG_FILE), exist_ok=True)
+        try:
+            with open(self.LOG_FILE, "w", encoding="utf-8") as f:
+                json.dump(self.controller.simulacao_dados, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            print("Erro criando log:", e)
+
+    def _apagar_log(self):
+        if os.path.exists(self.LOG_FILE):
+            os.remove(self.LOG_FILE)
 
     # =========================
     # Botões
@@ -215,9 +240,26 @@ class TelaMonitoramento(tb.Frame):
             esp.modo = "MANUAL"
             esp.bateria_controller.desligar_tudo()
 
+    # =========================
+    # Voltar com confirmação
+    # =========================
     def voltar_tela_inicial(self):
-        self.controller.show_frame("TelaInicial")
-
+        if os.path.exists(self.LOG_FILE):
+            resposta = messagebox.askyesno(
+                "Interromper Simulação",
+                "Deseja interromper a leitura de dados?\nSe sim, o log será apagado."
+            )
+            if resposta:
+                if self.controller.esp_reader:
+                    try:
+                        self.controller.esp_reader.parar()
+                    except Exception:
+                        pass
+                self._apagar_log()
+                self.controller.simulacao_dados = {}
+                self.controller.show_frame("TelaInicial")
+        else:
+            self.controller.show_frame("TelaInicial")
 
     # =========================
     # Atualização labels
@@ -225,15 +267,14 @@ class TelaMonitoramento(tb.Frame):
     def atualizar_labels(self):
         if not self.winfo_exists():
             return
-
         try:
             dados = getattr(self.controller, "simulacao_dados", {})
 
-            # Atualiza CSV
             if "csv" in dados:
                 if self.csv_file != dados["csv"]:
                     self.csv_file = dados["csv"]
                     self._inicializar_csv()
+                    self._carregar_csv_existente()
                 rel_csv = os.path.relpath(self.csv_file, os.getcwd())
                 self.csv_label.config(text=f"CSV: {rel_csv}")
 
@@ -252,7 +293,6 @@ class TelaMonitoramento(tb.Frame):
                 self.carga_label.config(text=f"Carga: {esp.carga}")
                 self.descarga_label.config(text=f"Descarga: {esp.descarga}")
 
-                # 🔹 Só alterna visibilidade dos botões se NÃO for modo ciclos
                 if not self.modo_ciclos:
                     if esp.carga == "ON":
                         self.btn_carga.grid_remove()
@@ -268,7 +308,6 @@ class TelaMonitoramento(tb.Frame):
                 self.after_id = self.after(1000, self.atualizar_labels)
         except Exception:
             pass
-
 
     # =========================
     # Gráfico
@@ -292,13 +331,12 @@ class TelaMonitoramento(tb.Frame):
                 self.ax.set_title("Tensão da Bateria em Tempo Real")
                 self.ax.grid(True)
                 try:
-                    self.ax.set_ylim(0, self.controller.dados_simulacao.dados_bateria.tensao_descarga * 1.1)
+                    self.ax.set_ylim(0, self.controller.simulacao_dados["dados_bateria"]["tensao_descarga"]*1.1)
                 except Exception:
                     pass
                 self.canvas.draw()
         except Exception:
             pass
-
 
     # =========================
     # Destroy seguro
