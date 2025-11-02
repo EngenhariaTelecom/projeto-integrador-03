@@ -1,6 +1,7 @@
 # core/monitor.py
 import serial
 import serial.tools.list_ports
+from .bateria import BateriaController
 import threading
 import time
 import os
@@ -25,6 +26,7 @@ class ESPReader(threading.Thread):
         self.descarga = "OFF"
         self.arquivo_csv = None  # ainda não definido
         self.tempo_inicial = time.time()
+        self.bateria_controller = BateriaController(self)
 
     def definir_csv(self, caminho_csv):
         """Define o arquivo CSV que será usado e cria o arquivo se não existir"""

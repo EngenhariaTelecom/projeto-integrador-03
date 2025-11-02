@@ -161,23 +161,30 @@ class TelaMonitoramento(tb.Frame):
         if esp:
             esp.carga = "ON"
             esp.descarga = "OFF"
+            esp.modo = "MANUAL"
+            esp.bateria_controller.iniciar_carga()
 
     def iniciar_descarga(self):
         esp = getattr(self.controller, "esp_reader", None)
         if esp:
             esp.descarga = "ON"
             esp.carga = "OFF"
+            esp.modo = "MANUAL"
+            esp.bateria_controller.iniciar_descarga()
 
     def alternar_modo(self):
         esp = getattr(self.controller, "esp_reader", None)
         if esp:
-            esp.modo = "AUTO" if esp.modo == "MANUAL" else "MANUAL"
+            esp.modo = "AUTO"
+            esp.bateria_controller.alternar_modo()
 
     def desativar_tudo(self):
         esp = getattr(self.controller, "esp_reader", None)
         if esp:
             esp.carga = "OFF"
             esp.descarga = "OFF"
+            esp.modo = "MANUAL"
+            esp.bateria_controller.desligar_tudo()
 
 
     # =========================
