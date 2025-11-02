@@ -259,7 +259,7 @@ class TelaMonitoramento(tb.Frame):
                 self.ax.set_xlabel("Tempo (s)")
                 self.ax.set_ylabel("Tensão (V)")
                 self.ax.set_title("Tensão da Bateria em Tempo Real")
-                self.ax.set_ylim(2.5, 4.5)
+                self.ax.set_ylim(0,self.controller.dados_simulacao.dados_bateria.tensao_descarga * 1.1)
                 self.ax.grid(True)
                 self.canvas.draw()
         except Exception:
