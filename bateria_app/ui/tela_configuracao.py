@@ -185,11 +185,6 @@ class TelaConfiguracao(ttk.Frame):
             self.controller.esp_reader = ESPReader(porta=porta)
             self.controller.esp_reader.definir_csv(csv_file)
             self.controller.esp_reader.start()
-
-            # 🔹 Envia comando "AUTO" se for modo de ciclos múltiplos
-            if tipo == "ciclos":
-                time.sleep(1)  # pequeno delay para garantir que a serial está pronta
-                self.controller.esp_reader.bateria_controller.alternar_modo()
         except Exception as e:
             print("Erro iniciando ESPReader:", e)
             messagebox.showerror("Erro", f"Falha ao iniciar comunicação com ESP:\n{e}")
