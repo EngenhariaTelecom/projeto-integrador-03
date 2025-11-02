@@ -97,7 +97,9 @@ class ESPReader(threading.Thread):
                         # Salva no CSV somente se definido
                         if self.arquivo_csv:
                             self.salvar_csv(self.ultima_tensao)
+                self.ser.write(("USB ON" + "\n").encode())
             except Exception:
+                print("⚠️ Erro ao ler dados da ESP32.")
                 pass
 
     def parar(self):

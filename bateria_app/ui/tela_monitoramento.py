@@ -1,4 +1,3 @@
-# ui/tela_monitoramento.py
 import ttkbootstrap as tb
 from ttkbootstrap.constants import *
 import matplotlib.pyplot as plt
@@ -18,6 +17,7 @@ class TelaMonitoramento(tb.Frame):
     def __init__(self, parent, controller):
         super().__init__(parent)
         self.controller = controller
+        self.modo_ciclos = False  # 🔹 Define se está em teste de ciclos
 
         # =========================
         # Configurações do gráfico e dados
@@ -99,6 +99,8 @@ class TelaMonitoramento(tb.Frame):
         # -------------------------
         frame_botoes = tb.Frame(conteudo)
         frame_botoes.pack(pady=(10,0))
+        self.frame_botoes = frame_botoes  # 🔹 Referência para esconder/mostrar em ciclos
+
         self.btn_carga = tb.Button(frame_botoes, text="▶️ Iniciar Carga", bootstyle=SUCCESS, command=self.iniciar_carga)
         self.btn_carga.grid(row=0, column=0, padx=5)
         self.btn_descarga = tb.Button(frame_botoes, text="⚡ Iniciar Descarga", bootstyle=INFO, command=self.iniciar_descarga)
@@ -118,7 +120,7 @@ class TelaMonitoramento(tb.Frame):
             text="← Voltar à Tela Inicial",
             bootstyle="secondary-outline",
             width=25,
-            command=lambda: controller.show_frame("TelaInicial")
+            command=lambda: self.voltar_tela_inicial()
         ).pack()
 
         # -------------------------
@@ -126,6 +128,35 @@ class TelaMonitoramento(tb.Frame):
         # -------------------------
         self.ani = FuncAnimation(self.fig, self.atualizar_grafico, interval=1000, cache_frame_data=False)
         self.atualizar_labels()
+
+
+    # =========================
+    # Atualizar dados (chamado por show_frame)
+    # =========================
+    def atualizar_dados(self, dados):
+        """
+        Atualiza dados da simulação e define comportamento visual
+        conforme o tipo de teste (manual ou ciclos).
+        """
+        self.controller.simulacao_dados = dados
+        tipo = dados.get("tipo", "")
+        esp = getattr(self.controller, "esp_reader", None)
+
+        if tipo.lower() == "ciclos":
+            # 🔹 Entra em modo ciclos automático
+            self.modo_ciclos = True
+            if esp:
+                esp.modo = "AUTO"
+                esp.bateria_controller.alternar_modo()
+
+            # 🔹 Esconde todos os botões de controle
+            for btn in [self.btn_carga, self.btn_descarga, self.btn_alternar, self.btn_desativar]:
+                btn.grid_remove()
+        else:
+            # 🔹 Modo manual
+            self.modo_ciclos = False
+            for btn in [self.btn_carga, self.btn_descarga, self.btn_alternar, self.btn_desativar]:
+                btn.grid()
 
 
     # =========================
@@ -150,7 +181,7 @@ class TelaMonitoramento(tb.Frame):
                 writer = csv.writer(f)
                 writer.writerow([f"{t:.1f}", f"{tensao:.3f}", modo, carga, descarga])
         except Exception:
-            pass  # Proteção total
+            pass
 
 
     # =========================
@@ -186,18 +217,21 @@ class TelaMonitoramento(tb.Frame):
             esp.modo = "MANUAL"
             esp.bateria_controller.desligar_tudo()
 
+    def voltar_tela_inicial(self):
+        self.controller.show_frame("TelaInicial")
+
 
     # =========================
     # Atualização labels
     # =========================
     def atualizar_labels(self):
         if not self.winfo_exists():
-            return  # Proteção caso frame já tenha sido destruído
+            return
 
         try:
             dados = getattr(self.controller, "simulacao_dados", {})
 
-            # Atualiza CSV se simulação foi iniciada
+            # Atualiza CSV
             if "csv" in dados:
                 if self.csv_file != dados["csv"]:
                     self.csv_file = dados["csv"]
@@ -220,18 +254,18 @@ class TelaMonitoramento(tb.Frame):
                 self.carga_label.config(text=f"Carga: {esp.carga}")
                 self.descarga_label.config(text=f"Descarga: {esp.descarga}")
 
-                # Alternância de botões
-                if esp.carga == "ON":
-                    self.btn_carga.grid_remove()
-                    self.btn_descarga.grid()
-                elif esp.descarga == "ON":
-                    self.btn_descarga.grid_remove()
-                    self.btn_carga.grid()
-                else:
-                    self.btn_carga.grid()
-                    self.btn_descarga.grid()
+                # 🔹 Só alterna visibilidade dos botões se NÃO for modo ciclos
+                if not self.modo_ciclos:
+                    if esp.carga == "ON":
+                        self.btn_carga.grid_remove()
+                        self.btn_descarga.grid()
+                    elif esp.descarga == "ON":
+                        self.btn_descarga.grid_remove()
+                        self.btn_carga.grid()
+                    else:
+                        self.btn_carga.grid()
+                        self.btn_descarga.grid()
 
-            # Agendamento seguro do próximo update
             if self.winfo_exists():
                 self.after_id = self.after(1000, self.atualizar_labels)
         except Exception:
@@ -243,8 +277,7 @@ class TelaMonitoramento(tb.Frame):
     # =========================
     def atualizar_grafico(self, frame):
         if not self.winfo_exists():
-            return  # Proteção caso frame já tenha sido destruído
-
+            return
         try:
             esp = getattr(self.controller, "esp_reader", None)
             if esp and esp.ultima_tensao is not None:
@@ -259,8 +292,11 @@ class TelaMonitoramento(tb.Frame):
                 self.ax.set_xlabel("Tempo (s)")
                 self.ax.set_ylabel("Tensão (V)")
                 self.ax.set_title("Tensão da Bateria em Tempo Real")
-                self.ax.set_ylim(0,self.controller.dados_simulacao.dados_bateria.tensao_descarga * 1.1)
                 self.ax.grid(True)
+                try:
+                    self.ax.set_ylim(0, self.controller.dados_simulacao.dados_bateria.tensao_descarga * 1.1)
+                except Exception:
+                    pass
                 self.canvas.draw()
         except Exception:
             pass
@@ -270,7 +306,6 @@ class TelaMonitoramento(tb.Frame):
     # Destroy seguro
     # =========================
     def destroy(self):
-        # Cancela after
         if hasattr(self, 'after_id') and self.after_id:
             try:
                 self.after_cancel(self.after_id)
@@ -278,7 +313,6 @@ class TelaMonitoramento(tb.Frame):
                 pass
             self.after_id = None
 
-        # Para matplotlib animation
         if hasattr(self, 'ani') and self.ani.event_source:
             try:
                 self.ani.event_source.stop()
@@ -286,7 +320,6 @@ class TelaMonitoramento(tb.Frame):
                 pass
             del self.ani
 
-        # Fecha figura matplotlib
         if hasattr(self, 'fig'):
             try:
                 plt.close(self.fig)

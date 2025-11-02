@@ -1,11 +1,13 @@
 # ui/tela_configuracao.py
 import os
+import time
 import tkinter as tk
 from tkinter import messagebox
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 import threading
 import serial.tools.list_ports
+import csv
 from ui.autocomplete import AutocompleteEntry
 from core.monitor import ESPReader
 
@@ -137,8 +139,39 @@ class TelaConfiguracao(ttk.Frame):
         pasta_dados = os.path.join(os.getcwd(), "assets", "dados")
         os.makedirs(pasta_dados, exist_ok=True)
 
+        # Caminho completo do CSV
         csv_file = os.path.join(pasta_dados, f"{nome_arquivo}.csv")
 
+        # Se já existir, perguntar ao usuário
+        while os.path.exists(csv_file):
+            resposta = messagebox.askyesno(
+                "Arquivo já existe",
+                f"O arquivo '{nome_arquivo}.csv' já existe.\nDeseja sobrescrever?"
+            )
+            if resposta:
+                try:
+                    # Limpa e reescreve cabeçalho
+                    with open(csv_file, "w", newline='') as f:
+                        writer = csv.writer(f)
+                        writer.writerow(["Tempo (s)", "Tensao (V)", "Modo", "Carga", "Descarga"])
+                    print(f"🧹 Arquivo sobrescrito e cabeçalho recriado: {csv_file}")
+                    break
+                except Exception as e:
+                    messagebox.showerror("Erro", f"Não foi possível sobrescrever o arquivo:\n{e}")
+                    return
+            else:
+                # Solicita novo nome
+                novo_nome = tk.simpledialog.askstring(
+                    "Novo nome",
+                    "Digite um novo nome para o arquivo CSV:"
+                )
+                if not novo_nome:
+                    messagebox.showinfo("Cancelado", "Operação cancelada pelo usuário.")
+                    return
+                nome_arquivo = novo_nome.strip()
+                csv_file = os.path.join(pasta_dados, f"{nome_arquivo}.csv")
+
+        # Salva as informações da simulação
         self.controller.simulacao_dados = {
             "porta": porta,
             "csv": csv_file,
@@ -147,11 +180,20 @@ class TelaConfiguracao(ttk.Frame):
             "dados_bateria": self.dados_bateria
         }
 
+        # Inicializa e conecta a ESPReader
         try:
             self.controller.esp_reader = ESPReader(porta=porta)
             self.controller.esp_reader.definir_csv(csv_file)
             self.controller.esp_reader.start()
+
+            # 🔹 Envia comando "AUTO" se for modo de ciclos múltiplos
+            if tipo == "ciclos":
+                time.sleep(1)  # pequeno delay para garantir que a serial está pronta
+                self.controller.esp_reader.bateria_controller.alternar_modo()
         except Exception as e:
             print("Erro iniciando ESPReader:", e)
+            messagebox.showerror("Erro", f"Falha ao iniciar comunicação com ESP:\n{e}")
+            return
 
+        # Prossegue para a tela de monitoramento
         self.controller.show_frame("TelaMonitoramento")
