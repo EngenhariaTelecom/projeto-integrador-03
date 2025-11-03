@@ -1,29 +1,37 @@
 # ui/base_app.py
 import os
+import sys
+import time
+import json
 import ttkbootstrap as tb
+from tkinter import PhotoImage, messagebox
+
 from ui.tela_inicial import TelaInicial
 from ui.tela_selecao import TelaSelecao
 from ui.tela_configuracao import TelaConfiguracao
 from ui.tela_monitoramento import TelaMonitoramento
 from ui.tela_ciclos import TelaCiclos
 from ui.tela_historico import TelaHistorico
-from tkinter import PhotoImage, messagebox
-import json
+
+# import do ESPReader para poder recriar ao retomar
+try:
+    from core.monitor import ESPReader
+except Exception:
+    ESPReader = None  # se não disponível, continuamos mas sem reconectar serial
+
 
 class BatteryApp(tb.Window):
     def __init__(self):
         super().__init__(themename="cyborg")
-        self.title("Monitor de Bateria v1.0")
+        self.title("Monitor de Bateria")
         self.geometry("1200x700")
 
-        # Backend ESPReader
+        # Comunicação com ESP
         self.esp_reader = None
         self.simulacao_dados = {}
 
-        # Caminho do arquivo de log
+        # Arquivo de log
         self.log_file = os.path.join(os.getcwd(), "assets", "dados", "simulacao_log.json")
-
-        # Configura protocolo de fechamento
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
 
         # Ícone
@@ -43,14 +51,17 @@ class BatteryApp(tb.Window):
         self.container.grid_rowconfigure(0, weight=1)
         self.container.grid_columnconfigure(0, weight=1)
 
-        # Inicializa todas as telas
+        # Criação de telas
         self.frames = {}
         for Tela in (TelaInicial, TelaSelecao, TelaConfiguracao, TelaMonitoramento, TelaCiclos, TelaHistorico):
             frame = Tela(parent=self.container, controller=self)
             self.frames[Tela.__name__] = frame
             frame.grid(row=0, column=0, sticky="nsew")
 
-        # Verifica se há log de simulação intacto
+        # Detectar simulação interrompida
+        self._verificar_log()
+
+    def _verificar_log(self):
         if os.path.exists(self.log_file):
             try:
                 with open(self.log_file, "r", encoding="utf-8") as f:
@@ -60,13 +71,47 @@ class BatteryApp(tb.Window):
                     "Foi detectada uma simulação interrompida.\nDeseja continuar de onde parou?"
                 )
                 if resposta:
-                    # Retoma simulação
+                    # salva nos dados do app
                     self.simulacao_dados = log_data
+
+                    # tenta recriar e iniciar ESPReader se a porta estiver no log
+                    porta = log_data.get("porta")
+                    csv_path = log_data.get("csv")
+                    if ESPReader is not None and porta:
+                        try:
+                            esp = ESPReader(porta=porta)
+                            # garante que o esp saiba qual csv usar (mesmo caminho absoluto)
+                            if csv_path:
+                                try:
+                                    esp.definir_csv(csv_path)
+                                except Exception:
+                                    pass
+                            # guarda referência no app e inicia thread (daemon)
+                            self.esp_reader = esp
+                            self.esp_reader.start()
+                            # deixa controller apontando também
+                            # (algumas telas leem controller.esp_reader)
+                            time.sleep(0.05)  # pequena margem para thread iniciar (não bloqueante)
+                        except Exception as e:
+                            print("Não foi possível criar ESPReader ao retomar:", e)
+
+                    # carregar tela de monitoramento com retomar=True
+                    frame = self.frames["TelaMonitoramento"]
+                    # chamar atualizar_dados com retomar=True
+                    try:
+                        frame.atualizar_dados(self.simulacao_dados, retomar=True)
+                    except TypeError:
+                        # se versão antiga do método atualizar_dados (sem retomar param)
+                        frame.atualizar_dados(self.simulacao_dados)
                     self.show_frame("TelaMonitoramento")
                 else:
-                    os.remove(self.log_file)
+                    try:
+                        os.remove(self.log_file)
+                    except Exception:
+                        pass
                     self.show_frame("TelaInicial")
-            except Exception:
+            except Exception as e:
+                print("Erro ao ler log:", e)
                 self.show_frame("TelaInicial")
         else:
             self.show_frame("TelaInicial")
@@ -78,7 +123,7 @@ class BatteryApp(tb.Window):
         # Se for Monitoramento, atualiza dados e cria log
         if nome == "TelaMonitoramento" and hasattr(frame, "atualizar_dados"):
             frame.atualizar_dados(self.simulacao_dados)
-            self._criar_log()
+            frame._criar_log()
 
         # Atualiza histórico para voltar à TelaInicial
         if nome == "TelaHistorico":
@@ -87,18 +132,7 @@ class BatteryApp(tb.Window):
 
         frame.tkraise()
 
-    def _criar_log(self):
-        """Cria ou atualiza o arquivo de log com os dados atuais da simulação"""
-        pasta = os.path.dirname(self.log_file)
-        os.makedirs(pasta, exist_ok=True)
-        try:
-            with open(self.log_file, "w", encoding="utf-8") as f:
-                json.dump(self.simulacao_dados, f, indent=2, ensure_ascii=False)
-        except Exception as e:
-            print("Erro criando log de simulação:", e)
-
     def voltar_tela_inicial_com_log(self):
-        """Função para o botão 'Voltar à Tela Inicial' na TelaMonitoramento"""
         if not self.simulacao_dados:
             self.show_frame("TelaInicial")
             return
@@ -108,7 +142,6 @@ class BatteryApp(tb.Window):
             "Deseja interromper a leitura de dados?\nSe sim, o arquivo de log será apagado."
         )
         if resposta:
-            # Interrompe leitura e apaga log
             if self.esp_reader:
                 try:
                     self.esp_reader.parar()
@@ -121,9 +154,6 @@ class BatteryApp(tb.Window):
                     pass
             self.simulacao_dados = {}
             self.show_frame("TelaInicial")
-        else:
-            # Mantém simulação ativa
-            pass
 
     def on_closing(self):
         if hasattr(self, "frames") and "TelaMonitoramento" in self.frames:
@@ -141,6 +171,12 @@ class BatteryApp(tb.Window):
         if self.esp_reader is not None:
             try:
                 self.esp_reader.parar()
+            except Exception:
+                pass
+        # Remove arquivo de log
+        if os.path.exists(self.log_file):
+            try:
+                os.remove(self.log_file)
             except Exception:
                 pass
 

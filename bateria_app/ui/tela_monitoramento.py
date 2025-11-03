@@ -101,7 +101,7 @@ class TelaMonitoramento(tb.Frame):
         self.btn_descarga = tb.Button(frame_botoes, text="⚡ Iniciar Descarga", bootstyle=INFO, command=self.iniciar_descarga)
         self.btn_descarga.grid(row=0, column=1, padx=5)
         self.btn_desativar = tb.Button(frame_botoes, text="⏹ Desativar Tudo", bootstyle=WARNING, command=self.desativar_tudo)
-        self.btn_desativar.grid(row=0, column=3, padx=5)
+        self.btn_desativar.grid(row=0, column=2, padx=5)
 
         # Botão de voltar
         frame_voltar = tb.Frame(conteudo)
@@ -119,27 +119,39 @@ class TelaMonitoramento(tb.Frame):
         self.atualizar_labels()
 
     # =========================
-    # Atualizar dados
+    # Atualizar dados (chamado por base_app)
     # =========================
-    def atualizar_dados(self, dados):
-        self.controller.simulacao_dados = dados
-        tipo = dados.get("tipo", "")
+    def atualizar_dados(self, dados, retomar=False):
+        """
+        Atualiza dados da simulação e define comportamento visual
+        conforme o tipo de teste (manual ou ciclos).
+        retomar=True indica que estamos restaurando de um log existente.
+        """
+        self.controller.simulacao_dados = dados or {}
+        tipo = (dados or {}).get("tipo", "")
         esp = getattr(self.controller, "esp_reader", None)
 
         # Define CSV
-        if "csv" in dados:
+        if dados and "csv" in dados:
             self.csv_file = dados["csv"]
             self._inicializar_csv()
-            self._carregar_csv_existente()
+            if retomar:
+                self._carregar_csv_existente()
 
-        # Log
-        self._criar_log()
+        # 🔹 Cria o log somente se não estivermos retomando
+        if not retomar:
+            self._criar_log()
 
+        # Define o tipo de modo
         if tipo.lower() == "ciclos":
             self.modo_ciclos = True
             if esp:
                 esp.modo = "AUTO"
-                esp.bateria_controller.alternar_modo()
+                try:
+                    if hasattr(esp, "bateria_controller"):
+                        esp.bateria_controller.alternar_modo()
+                except Exception:
+                    pass
             for btn in [self.btn_carga, self.btn_descarga, self.btn_desativar]:
                 btn.grid_remove()
         else:
@@ -150,7 +162,7 @@ class TelaMonitoramento(tb.Frame):
                 btn.grid()
 
     # =========================
-    # CSV
+    # CSV helpers
     # =========================
     def _inicializar_csv(self):
         if not self.csv_file:
@@ -165,22 +177,48 @@ class TelaMonitoramento(tb.Frame):
     def _carregar_csv_existente(self):
         if not self.csv_file or not os.path.exists(self.csv_file):
             return
-        with open(self.csv_file, "r", newline='') as f:
-            reader = csv.DictReader(f)
-            self.dados_tempo.clear()
-            self.dados_tensao.clear()
-            for row in reader:
-                try:
-                    t = float(row["Tempo (s)"])
-                    v = float(row["Tensao (V)"])
-                    self.dados_tempo.append(t)
-                    self.dados_tensao.append(v)
-                except Exception:
-                    continue
+        last_mode = None
+        last_charge = None
+        last_disch = None
+        self.dados_tempo.clear()
+        self.dados_tensao.clear()
+        try:
+            with open(self.csv_file, "r", newline='') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    try:
+                        t = float(row.get("Tempo (s)", "") or row.get("Tempo", "") or 0.0)
+                        v = float(row.get("Tensao (V)", "") or row.get("Tensao", "") or 0.0)
+                        self.dados_tempo.append(t)
+                        self.dados_tensao.append(v)
+                        if "Modo" in row:
+                            last_mode = row.get("Modo") or last_mode
+                        if "Carga" in row:
+                            last_charge = row.get("Carga") or last_charge
+                        if "Descarga" in row:
+                            last_disch = row.get("Descarga") or last_disch
+                    except Exception:
+                        continue
+        except Exception:
+            return
         if self.dados_tempo:
             self.tempo_inicial = time.time() - self.dados_tempo[-1]
         else:
             self.tempo_inicial = time.time()
+        esp = getattr(self.controller, "esp_reader", None)
+        if esp:
+            if last_mode:
+                esp.modo = last_mode
+            if last_charge:
+                esp.carga = last_charge
+            if last_disch:
+                esp.descarga = last_disch
+        if last_mode:
+            self.modo_label.config(text=f"Modo: {last_mode}")
+        if last_charge:
+            self.carga_label.config(text=f"Carga: {last_charge}")
+        if last_disch:
+            self.descarga_label.config(text=f"Descarga: {last_disch}")
 
     def salvar_csv(self, t, tensao, modo, carga, descarga):
         if not self.csv_file:
@@ -196,12 +234,25 @@ class TelaMonitoramento(tb.Frame):
     # Log
     # =========================
     def _criar_log(self):
-        os.makedirs(os.path.dirname(self.LOG_FILE), exist_ok=True)
+        """
+        Cria o arquivo de log apenas ao entrar na tela de monitoramento.
+        Mostra no console se o log foi criado com sucesso ou se houve erro.
+        """
         try:
+            os.makedirs(os.path.dirname(self.LOG_FILE), exist_ok=True)
+            log_info = {
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "bateria": self.controller.simulacao_dados.get("dados_bateria", {}).get("nome", "---"),
+                "serial": self.controller.simulacao_dados.get("porta", "---"),
+                "arquivo_csv": self.controller.simulacao_dados.get("csv", "---"),
+                "modo": self.controller.simulacao_dados.get("tipo", "---"),
+            }
             with open(self.LOG_FILE, "w", encoding="utf-8") as f:
-                json.dump(self.controller.simulacao_dados, f, indent=2, ensure_ascii=False)
+                json.dump(log_info, f, indent=2, ensure_ascii=False)
+            print(f"[LOG] Arquivo de log criado com sucesso!")
+            print(f"[LOG] Caminho: {self.LOG_FILE}")
         except Exception as e:
-            print("Erro criando log:", e)
+            print(f"[LOG] Erro ao criar o arquivo de log: {e}")
 
     def _apagar_log(self):
         if os.path.exists(self.LOG_FILE):
@@ -216,7 +267,10 @@ class TelaMonitoramento(tb.Frame):
             esp.carga = "ON"
             esp.descarga = "OFF"
             esp.modo = "MANUAL"
-            esp.bateria_controller.iniciar_carga()
+            try:
+                esp.bateria_controller.iniciar_carga()
+            except Exception:
+                pass
 
     def iniciar_descarga(self):
         esp = getattr(self.controller, "esp_reader", None)
@@ -224,13 +278,19 @@ class TelaMonitoramento(tb.Frame):
             esp.descarga = "ON"
             esp.carga = "OFF"
             esp.modo = "MANUAL"
-            esp.bateria_controller.iniciar_descarga()
+            try:
+                esp.bateria_controller.iniciar_descarga()
+            except Exception:
+                pass
 
     def alternar_modo(self):
         esp = getattr(self.controller, "esp_reader", None)
         if esp:
             esp.modo = "AUTO"
-            esp.bateria_controller.alternar_modo()
+            try:
+                esp.bateria_controller.alternar_modo()
+            except Exception:
+                pass
 
     def desativar_tudo(self):
         esp = getattr(self.controller, "esp_reader", None)
@@ -238,7 +298,10 @@ class TelaMonitoramento(tb.Frame):
             esp.carga = "OFF"
             esp.descarga = "OFF"
             esp.modo = "MANUAL"
-            esp.bateria_controller.desligar_tudo()
+            try:
+                esp.bateria_controller.desligar_tudo()
+            except Exception:
+                pass
 
     # =========================
     # Voltar com confirmação
