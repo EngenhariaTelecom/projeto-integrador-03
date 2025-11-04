@@ -154,14 +154,17 @@ void loop() {
   // Saída de status no monitor serial
   Serial.print("Vbat: ");
   Serial.print(v_batt, 3);
-  Serial.print(" V | Corrente: ");
-  Serial.print(corrente, 3);
-  Serial.print(" A | Mode: ");
+
+  Serial.print(" V | Mode: ");
   Serial.print((mode == AUTO) ? "AUTO" : "MANUAL");
   Serial.print(" | Charge: ");
   Serial.print(forceCharge ? "ON" : "OFF");
   Serial.print(" | Disch: ");
-  Serial.println(forceDischarge ? "ON" : "OFF");
+  Serial.print(forceDischarge ? "ON" : "OFF");
+
+  Serial.print(" | Corrente: ");
+  Serial.print(corrente, 3);
+  Serial.println(" A ");
 
   delay(500);
 }
