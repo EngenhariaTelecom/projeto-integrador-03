@@ -37,6 +37,7 @@ class ESPReader(threading.Thread):
     # CSV
     # ===============================
     def definir_csv(self, caminho_csv):
+        """Define arquivo CSV e garante cabeçalho (inclui Corrente)."""
         self.arquivo_csv = os.path.abspath(caminho_csv)
         pasta = os.path.dirname(self.arquivo_csv)
         os.makedirs(pasta, exist_ok=True)
@@ -46,6 +47,7 @@ class ESPReader(threading.Thread):
                 writer.writerow(["Tempo (s)", "Tensao (V)", "Corrente (A)", "Modo", "Carga", "Descarga"])
 
     def salvar_csv(self, tensao, corrente):
+        """Salva uma linha no CSV (usa tempo relativo interno)."""
         if not self.arquivo_csv:
             raise Exception("📁 O arquivo CSV precisa ser definido antes de salvar os dados.")
         t = time.time() - self.tempo_inicial
@@ -53,7 +55,7 @@ class ESPReader(threading.Thread):
             writer = csv.writer(f)
             writer.writerow([
                 f"{t:.1f}",
-                f"{tensao:.3f}",
+                f"{tensao:.3f}" if tensao is not None else "",
                 f"{corrente:.3f}" if corrente is not None else "",
                 self.modo,
                 self.carga,
@@ -73,14 +75,20 @@ class ESPReader(threading.Thread):
                     try:
                         self.ser = serial.Serial(p.device, self.baudrate, timeout=1)
                         time.sleep(2)
-                        self.ser.reset_input_buffer()
+                        try:
+                            self.ser.reset_input_buffer()
+                        except Exception:
+                            pass
                         linha = self.ser.readline().decode(errors='ignore').strip()
                         if linha:
                             self.porta = p.device
                             print(f"✅ ESP32 detectada na porta {p.device}")
                             break
                         else:
-                            self.ser.close()
+                            try:
+                                self.ser.close()
+                            except Exception:
+                                pass
                     except Exception:
                         continue
                 if not self.ser or not self.ser.is_open:
@@ -105,20 +113,34 @@ class ESPReader(threading.Thread):
                 linha = self.ser.readline().decode(errors='ignore').strip()
                 if not linha:
                     continue
+                # Ex.: "Vbat: 4.15 V | Mode: AUTO | Charge: ON | Disch: OFF | Corrente: 0.56 A"
                 if linha.startswith("Vbat:"):
                     print(linha)
-                    partes = linha.split("|")
-                    # Esperado: 5 partes => Vbat / Mode / Charge / Disch / Corrente
+                    partes = [p.strip() for p in linha.split("|")]
+                    # Esperado: pelo menos 5 partes => Vbat / Mode / Charge / Disch / Corrente
                     if len(partes) >= 5:
                         try:
-                            self.ultima_tensao = float(partes[0].split(":")[1].split("V")[0])
-                            self.modo = partes[1].split(":")[1].strip()
-                            self.carga = partes[2].split(":")[1].strip()
-                            self.descarga = partes[3].split(":")[1].strip()
-                            self.corrente = float(partes[4].split(":")[1].split("A")[0])
-                            self.ultima_leitura = int(self.ultima_tensao * 1000)
+                            # Tensao
+                            p0 = partes[0].split(":", 1)[1].strip()
+                            # remove "V" e espaços
+                            self.ultima_tensao = float(p0.replace("V", "").strip())
+                            # Mode
+                            self.modo = partes[1].split(":", 1)[1].strip()
+                            # Charge
+                            self.carga = partes[2].split(":", 1)[1].strip()
+                            # Disch
+                            self.descarga = partes[3].split(":", 1)[1].strip()
+                            # Corrente
+                            p4 = partes[4].split(":", 1)[1].strip()
+                            self.corrente = float(p4.replace("A", "").strip())
+                            self.ultima_leitura = int(self.ultima_tensao * 1000) if self.ultima_tensao is not None else None
+
+                            # Salva no CSV se definido (reaproveita o método)
                             if self.arquivo_csv:
-                                self.salvar_csv(self.ultima_tensao, self.corrente)
+                                try:
+                                    self.salvar_csv(self.ultima_tensao, self.corrente)
+                                except Exception as e:
+                                    print(f"⚠️ Erro salvando CSV: {e}")
                         except Exception as e:
                             print(f"⚠️ Erro ao interpretar linha: {e}")
             except Exception:
