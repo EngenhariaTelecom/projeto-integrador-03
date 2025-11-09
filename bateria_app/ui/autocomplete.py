@@ -35,11 +35,14 @@ class AutocompleteEntry(ttk.Entry):
 
         # Eventos
         self.bind("<FocusIn>", self._clear_placeholder)
-        self.bind("<FocusOut>", self._set_placeholder)
         self.bind("<Right>", self.selection)
         self.bind("<Down>", self.move_down)
         self.bind("<Up>", self.move_up)
         self.bind("<Button-1>", self.show_all)
+        self.bind("<Return>", self.enter_pressed)
+
+        # Fechar listbox ao clicar fora do entry ou listbox
+        self.winfo_toplevel().bind_all("<Button-1>", self._on_click_outside, add="+")
 
         # Listbox e scrollbar
         self.listbox_up = False
@@ -93,7 +96,6 @@ class AutocompleteEntry(ttk.Entry):
             self.listbox.delete(0, "end")
             for w in words:
                 self.listbox.insert("end", w)
-            # Ajusta a altura da listbox
             altura = min(len(words), self.max_height)
             self.listbox.config(height=altura)
         else:
@@ -117,10 +119,21 @@ class AutocompleteEntry(ttk.Entry):
             self._clear_placeholder()
             self.var.set(self.listbox.get(sel[0]))
             self.icursor("end")
-            self.focus_set()  # mantém o foco para continuar digitando
+            self.focus_set()
             self.close_listbox()
             if self.on_select_callback:
                 self.on_select_callback(self.var.get())
+
+    # -------------------------
+    # Enter aceita valor digitado
+    # -------------------------
+    def enter_pressed(self, event):
+        self._clear_placeholder()
+        value = self.var.get()
+        self.close_listbox()
+        if self.on_select_callback:
+            self.on_select_callback(value)
+        return "break"
 
     # -------------------------
     # Navegação com setas
@@ -175,6 +188,7 @@ class AutocompleteEntry(ttk.Entry):
 
         self.listbox.bind("<<ListboxSelect>>", lambda e: self._select_current())
         self.listbox.bind("<Right>", self.selection)
+        self.listbox.bind("<Return>", self.enter_pressed)
 
         self.listbox_up = True
 
@@ -188,3 +202,11 @@ class AutocompleteEntry(ttk.Entry):
         self.listbox_frame = None
         self.listbox = None
         self.scrollbar = None
+
+    # -------------------------
+    # Fecha listbox se clicar fora do entry ou da listbox
+    # -------------------------
+    def _on_click_outside(self, event):
+        widget = event.widget
+        if widget not in (self, self.listbox):
+            self.close_listbox()

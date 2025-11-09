@@ -25,7 +25,7 @@ class TelaMonitoramento(tb.Frame):
         self.tempo_inicial = time.time()
 
         # Dados para gráfico (tensão apenas)
-        self.MAX_PONTOS = 300
+        self.MAX_PONTOS = 10000
         self.dados_tempo = deque(maxlen=self.MAX_PONTOS)
         self.dados_tensao = deque(maxlen=self.MAX_PONTOS)
 
@@ -95,7 +95,7 @@ class TelaMonitoramento(tb.Frame):
         # Gráfico de tensão
         plt.style.use('dark_background')
         self.fig, self.ax = plt.subplots(figsize=(8,3))
-        self.line, = self.ax.plot([], [], color='tab:blue')
+        self.line, = self.ax.plot([], [], color='tab:green')
         self.ax.set_xlabel("Tempo (s)")
         self.ax.set_ylabel("Tensão (V)")
         self.ax.set_title("Tensão da Bateria em Tempo Real")
@@ -257,9 +257,13 @@ class TelaMonitoramento(tb.Frame):
         esp = getattr(self.controller, "esp_reader", None)
         if esp:
             try:
+                esp.bateria_controller.desligar_tudo()
+            except Exception: pass
+            try:
                 esp.parar_envio_periodico()
             except Exception:
                 pass
+
         if os.path.exists(self.LOG_FILE):
             resposta = messagebox.askyesno(
                 "Interromper Simulação",
@@ -296,15 +300,19 @@ class TelaMonitoramento(tb.Frame):
             self.porta_label.config(text=f"Porta: {dados.get('porta','---')}")
             tipo = dados.get("tipo","---")
             self.tipo_label.config(text=f"Tipo: {tipo}")
-            self.ciclo_label.config(text=f"Ciclo: {self.ciclo_atual}/{self.ciclos_totais}")  # Atualiza label ciclo
+            self.ciclo_label.config(text=f"Ciclo: {self.ciclo_atual}/{self.ciclos_totais}")
 
             if esp:
                 try:
-                    self.tensao_label.config(text=f"Tensão: {esp.ultima_tensao:.3f} V" if esp.ultima_tensao is not None else "Tensão: -- V")
+                    self.tensao_label.config(
+                        text=f"Tensão: {esp.ultima_tensao:.3f} V" if esp.ultima_tensao is not None else "Tensão: -- V"
+                    )
                 except Exception:
                     self.tensao_label.config(text="Tensão: -- V")
                 try:
-                    self.corrente_label.config(text=f"Corrente: {esp.corrente:.3f} A" if esp.corrente is not None else "Corrente: -- A")
+                    self.corrente_label.config(
+                        text=f"Corrente: {esp.corrente:.3f} A" if esp.corrente is not None else "Corrente: -- A"
+                    )
                 except Exception:
                     self.corrente_label.config(text="Corrente: -- A")
                 self.modo_label.config(text=f"Modo: {esp.modo}")
@@ -317,73 +325,80 @@ class TelaMonitoramento(tb.Frame):
             pass
 
     # =========================
-    # Atualização do gráfico (somente tensão) e checagem de término
+    # Atualização do gráfico e checagem de término
     # =========================
     def atualizar_grafico(self, frame):
         esp = getattr(self.controller, "esp_reader", None)
         if not esp or esp.ultima_tensao is None:
             return
+
         try:
+            # Atualiza buffers
             t = time.time() - self.tempo_inicial
             self.dados_tempo.append(t)
             self.dados_tensao.append(esp.ultima_tensao)
 
+            # Redesenha gráfico
             self.ax.clear()
-            self.ax.plot(self.dados_tempo, self.dados_tensao, color='tab:blue')
+            self.ax.plot(self.dados_tempo, self.dados_tensao, color='tab:green')
             self.ax.set_xlabel("Tempo (s)")
             self.ax.set_ylabel("Tensão (V)")
             self.ax.set_title("Tensão da Bateria em Tempo Real")
             self.ax.grid(True)
             self.canvas.draw()
 
+            # Salva CSV se aplicável
             try:
                 if hasattr(esp, "salvar_csv") and esp.arquivo_csv:
                     esp.salvar_csv(esp.ultima_tensao, esp.corrente)
             except Exception as e:
                 print(f"[MONITORAMENTO] Erro ao salvar CSV via ESPReader: {e}")
 
-            # Checagem de término para carga/descarga simples
+            # Dados para análise de encerramento
             dados_bat = self.controller.simulacao_dados.get("dados_bateria", {}) or {}
-            tipo_teste = self.controller.simulacao_dados.get("tipo", "").lower()
+            tipo_teste = (self.controller.simulacao_dados.get("tipo", "") or "").lower().strip()
 
+            # Converte tensões com segurança
             try:
-                tensao_carga = float(dados_bat.get("tensao_carga")) if dados_bat.get("tensao_carga") not in (None, "") else None
+                tensao_carga = float(str(dados_bat.get("tensao_carga", "")).replace(",", ".") or 0)
             except Exception:
-                tensao_carga = None
+                print(f"[MONITORAMENTO] Tensão de carga inválida)")
+                tensao_carga = 0.0
             try:
-                tensao_descarga = float(dados_bat.get("tensao_descarga")) if dados_bat.get("tensao_descarga") not in (None, "") else None
+                tensao_descarga = float(str(dados_bat.get("tensao_descarga", "")).replace(",", ".") or 0)
             except Exception:
-                tensao_descarga = None
+                print(f"[MONITORAMENTO] Tensão de descarga inválida)")
+                tensao_descarga = 0.0
 
-            if tipo_teste == "carga" and tensao_carga is not None:
-                if esp.ultima_tensao >= tensao_carga:
-                    try: esp.bateria_controller.desligar_tudo()
-                    except Exception: pass
-                    try: esp.parar_envio_periodico()
-                    except Exception: pass
-                    messagebox.showinfo("Teste finalizado", "Tensão de carga atingida. Teste finalizado.")
-                    try: esp.parar()
-                    except Exception: pass
-                    self._apagar_log()
-                    self.controller.simulacao_dados = {}
-                    self.controller.show_frame("TelaInicial")
+            tolerancia = 0.01  # 10 mV de margem
+
+            def finalizar_teste(mensagem="Teste finalizado"):
+                try: esp.bateria_controller.desligar_tudo()
+                except Exception: pass
+                try: esp.parar_envio_periodico()
+                except Exception: pass
+                messagebox.showinfo("Teste finalizado", mensagem)
+                try: esp.parar()
+                except Exception: pass
+                self._apagar_log()
+                self.controller.simulacao_dados = {}
+                self.controller.show_frame("TelaInicial")
+
+            # --- Teste de carga ---
+            if tipo_teste == "carga" and tensao_carga > 0:
+                if esp.ultima_tensao >= (tensao_carga - tolerancia):
+                    print(f"[MONITORAMENTO] Tensão de carga atingida ({esp.ultima_tensao:.3f} V ≥ {tensao_carga:.3f} V)")
+                    finalizar_teste("Tensão de carga atingida. Teste finalizado.")
                     return
 
-            if tipo_teste == "descarga" and tensao_descarga is not None:
-                if esp.ultima_tensao <= tensao_descarga:
-                    try: esp.bateria_controller.desligar_tudo()
-                    except Exception: pass
-                    try: esp.parar_envio_periodico()
-                    except Exception: pass
-                    messagebox.showinfo("Teste finalizado", "Tensão de descarga atingida. Teste finalizado.")
-                    try: esp.parar()
-                    except Exception: pass
-                    self._apagar_log()
-                    self.controller.simulacao_dados = {}
-                    self.controller.show_frame("TelaInicial")
+            # --- Teste de descarga ---
+            if tipo_teste == "carga" and tensao_descarga > 0:
+                if esp.ultima_tensao <= (tensao_descarga + tolerancia):
+                    print(f"[MONITORAMENTO] Tensão de descarga atingida ({esp.ultima_tensao:.3f} V ≤ {tensao_descarga:.3f} V)")
+                    finalizar_teste("Tensão de descarga atingida. Teste finalizado.")
                     return
 
-            # Ciclos
+            # --- Ciclos ---
             if tipo_teste == "ciclos":
                 current_charge_state = esp.carga
                 if self._prev_carga_state is None:
@@ -392,24 +407,15 @@ class TelaMonitoramento(tb.Frame):
                     self.ciclo_atual += 1
                     self.controller.simulacao_dados["ciclo_atual"] = self.ciclo_atual
                     self._criar_log()
-                    print(f"[CICLOS] Ciclo detectado. Atual: {self.ciclo_atual}/{self.ciclos_totais}")
                     self._prev_carga_state = current_charge_state
                     self.ciclo_label.config(text=f"Ciclo: {self.ciclo_atual}/{self.ciclos_totais}")
 
                     if self.ciclos_totais and self.ciclo_atual >= self.ciclos_totais:
-                        try: esp.bateria_controller.desligar_tudo()
-                        except Exception: pass
-                        try: esp.parar_envio_periodico()
-                        except Exception: pass
-                        messagebox.showinfo("Teste finalizado", "Todos os ciclos foram concluídos. Teste finalizado.")
-                        try: esp.parar()
-                        except Exception: pass
-                        self._apagar_log()
-                        self.controller.simulacao_dados = {}
-                        self.controller.show_frame("TelaInicial")
+                        finalizar_teste("Todos os ciclos concluídos. Teste finalizado.")
                         return
 
-        except Exception:
+        except Exception as e:
+            print(f"[MONITORAMENTO] Erro geral em atualizar_grafico: {e}")
             pass
 
     # =========================

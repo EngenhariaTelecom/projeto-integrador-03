@@ -108,7 +108,7 @@ class TelaHistorico(tb.Frame):
             self.ax.set_title(f"Tensão vs Tempo — {nome_arquivo}")
             self.ax.set_xlabel("Tempo (s)")
             self.ax.set_ylabel("Tensão (V)")
-            self.ax.set_ylim(0, max(tensoes) * 1.1)
+            self.ax.set_ylim(min(tensoes) * 0.95, max(tensoes) * 1.05)
             self.ax.grid(True)
         else:
             self.ax.set_title(f"Nenhum dado válido em {nome_arquivo}")
