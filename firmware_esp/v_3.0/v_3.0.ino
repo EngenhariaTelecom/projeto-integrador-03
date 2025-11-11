@@ -165,9 +165,12 @@ void taskCore1(void *pvParameters) {
     // verifica timeout
     if (millis() - lastSerialTime > TIMEOUT_USB) {
       // tempo limite sem comunicação USB
+      forceCharge = false;
+      forceDischarge = false;
+      mode = MANUAL; // garante que não entre em AUTO sozinho
       setCharge(false);
       setDischarge(false);
-      Serial.println("Sem comunicação USB há 10s — desligando relés.");
+      Serial.println("Sem comunicação USB há 10s — desligando relés e travando em MANUAL");
     }
 
     vTaskDelay(pdMS_TO_TICKS(100)); // checa a cada 100ms
