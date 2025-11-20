@@ -25,9 +25,9 @@ const float ADS_VFSR = 4.096f;     // ±4.096 V (GAIN_ONE)
 const float ADC_COUNTS = 32767.0f;
 
 // ======== SENSOR DE CORRENTE (ACS712) ========
-const float SENSIBILIDADE = 0.066;  // V/A (para ACS712-30A)
+const float SENSIBILIDADE = 0.0098; 
 const int CANAL_CORRENTE = 1;       // A1 do ADS1115
-const int NUM_AMOSTRAS = 20;
+const int NUM_AMOSTRAS = 30;
 float offset_corrente = 0.0;
 
 // ======== CANAL DE LEITURA DA TENSÃO ========
@@ -47,7 +47,7 @@ float lerMediaADC(uint8_t canal) {
   long soma = 0;
   for (int i = 0; i < NUM_AMOSTRAS; i++) {
     soma += ads.readADC_SingleEnded(canal);
-    delay(5);
+    delay(2);
   }
   return soma / (float)NUM_AMOSTRAS;
 }
@@ -71,12 +71,29 @@ float readBatteryVoltage(uint8_t ch) {
   return v_real;
 }
 
+float rawToVolts(float raw) {
+    return raw * (ADS_VFSR / ADC_COUNTS);
+}
+
 // Lê corrente do sensor ACS712
-float readCurrent() {
-  float leitura = lerMediaADC(CANAL_CORRENTE);
-  float tensao_mV = (leitura - offset_corrente) * (ADS_VFSR / ADC_COUNTS) * 1000.0;
-  float corrente = tensao_mV / (SENSIBILIDADE * 1000.0); // A
-  return corrente;
+float lerCorrente() {
+    float raw = lerMediaADC(CANAL_CORRENTE);
+    float volts = rawToVolts(raw);
+
+    float vsignal = volts - offset_corrente;   // remove o offset de 2.5V
+
+    float corrente = vsignal / SENSIBILIDADE;
+
+    //proteção contra ruído pequeno
+    if (abs(corrente) < 0.05)   // valores menores que 50mA = 0
+        return 0.0;
+
+    // nunca negativo
+    if (corrente < 0) corrente = 0;
+    // nunca acima do máx possível 
+    if (corrente > 0.54) corrente = 0.54;
+
+    return corrente;
 }
 
 // ======== CONTROLE DOS RELÉS ========
@@ -143,20 +160,21 @@ void setup() {
   setCharge(false);
   setDischarge(false);
 
+  // ===== CALIBRAR OFFSET (ACS712 sem carga) =====
+  Serial.println("Calibrando offset de corrente (sem carga)");
+  delay(1000);
+  float raw = lerMediaADC(CANAL_CORRENTE);
+  offset_corrente = rawToVolts(raw);
+
   Serial.println("Sistema iniciado.");
   Serial.println("Iniciando em modo MANUAL (CHARGE OFF / DISCH OFF).");
   Serial.println("Comandos: AUTO | CHARGE ON | CHARGE OFF | DISCH ON | DISCH OFF");
 
-  // Calibra offset de corrente
-  Serial.println("Calibrando offset de corrente (sem carga)...");
-  offset_corrente = lerMediaADC(CANAL_CORRENTE);
-  Serial.print("Offset corrente: ");
-  Serial.println(offset_corrente, 4);
 }
 
 void loop() {
   float v_batt = readBatteryVoltage(CANAL_TENSAO);
-  float corrente = readCurrent();
+  float corrente = lerCorrente();
 
   // Leitura de comandos pela Serial
   if (Serial.available()) {
