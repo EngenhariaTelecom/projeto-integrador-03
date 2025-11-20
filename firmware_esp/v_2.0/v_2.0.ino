@@ -16,8 +16,9 @@ const int PIN_CHARGE_CTRL_1 = 25;
 const int PIN_CHARGE_CTRL_2 = 26;
 const int PIN_DISCHARGE_CTRL = 27;
 
-// Calibração da leitura de tensão
-float calib_factor = 1.0;
+// ======== SENSOR DE TENSAO ========
+const float DIVISOR = 5.0;
+const float OFFSET_ADC = 0.50;   // volts medidos SEM carga
 
 // ADS1115
 const float ADS_VFSR = 4.096f;     // ±4.096 V (GAIN_ONE)
@@ -51,12 +52,23 @@ float lerMediaADC(uint8_t canal) {
   return soma / (float)NUM_AMOSTRAS;
 }
 
-// Lê tensão da bateria (sem divisor de tensão)
+// Lê tensão da bateria
 float readBatteryVoltage(uint8_t ch) {
-  float adc_avg = lerMediaADC(ch);
-  float v_adc = adc_avg * (ADS_VFSR / ADC_COUNTS);
-  v_adc *= calib_factor;
-  return v_adc;
+
+  int16_t adc_raw = lerMediaADC(ch);
+
+  float v_adc = adc_raw * (ADS_VFSR / ADC_COUNTS);
+
+  // --- DETECTAR DESCONEXÃO ---
+  // Se a leitura for muito baixa (< 0.20 V na entrada do ADS),
+  // significa provavelmente que não existe bateria.
+  if (v_adc < 0.20) {
+    return 0.0;
+  }
+
+  // Caso contrário, bateria conectada → apenas converter normalmente
+  float v_real = v_adc * DIVISOR;
+  return v_real;
 }
 
 // Lê corrente do sensor ACS712
