@@ -9,6 +9,7 @@ const float V_BATT_MIN = 3.0;
 const float V_BATT_MIN_REENABLE = 3.05;
 const float V_BATT_MAX = 4.2;
 const float V_BATT_MAX_REENABLE = 4.15;
+const float DIVISOR = 5.0;
 
 const int PIN_CHARGE_CTRL_1 = 25;
 const int PIN_CHARGE_CTRL_2 = 26;
@@ -19,10 +20,10 @@ float calib_factor = 1.0;
 const float ADS_VFSR = 4.096f;
 const float ADC_COUNTS = 32767.0f;
 
-const float SENSIBILIDADE = 0.066;  // V/A (para ACS712-30A)
+const float SENSIBILIDADE = 0.0098; // V/A (para ACS712-30A)
 const int CANAL_CORRENTE = 1;       // A1
 const int CANAL_TENSAO = 0;         // A0
-const int NUM_AMOSTRAS = 20;
+const int NUM_AMOSTRAS = 30;
 
 float offset_corrente = 0.0;
 
@@ -46,23 +47,53 @@ float lerMediaADC(uint8_t canal) {
   long soma = 0;
   for (int i = 0; i < NUM_AMOSTRAS; i++) {
     soma += ads.readADC_SingleEnded(canal);
-    delay(5);
+    delay(2);
   }
   return soma / (float)NUM_AMOSTRAS;
 }
 
+// Lê tensão da bateria
 float readBatteryVoltage(uint8_t ch) {
-  float adc_avg = lerMediaADC(ch);
-  float v_adc = adc_avg * (ADS_VFSR / ADC_COUNTS);
-  v_adc *= calib_factor;
-  return v_adc;
+
+  int16_t adc_raw = lerMediaADC(ch);
+
+  float v_adc = adc_raw * (ADS_VFSR / ADC_COUNTS);
+
+  // --- DETECTAR DESCONEXÃO ---
+  // Se a leitura for muito baixa (< 0.20 V na entrada do ADS),
+  // significa provavelmente que não existe bateria.
+  if (v_adc < 0.20) {
+    return 0.0;
+  }
+
+  // Caso contrário, bateria conectada → apenas converter normalmente
+  float v_real = v_adc * DIVISOR;
+  return v_real;
 }
 
-float readCurrent() {
-  float leitura = lerMediaADC(CANAL_CORRENTE);
-  float tensao_mV = (leitura - offset_corrente) * (ADS_VFSR / ADC_COUNTS) * 1000.0;
-  float corrente = tensao_mV / (SENSIBILIDADE * 1000.0);
-  return corrente;
+float rawToVolts(float raw) {
+    return raw * (ADS_VFSR / ADC_COUNTS);
+}
+
+// Lê corrente do sensor ACS712
+float lerCorrente() {
+    float raw = lerMediaADC(CANAL_CORRENTE);
+    float volts = rawToVolts(raw);
+
+    float vsignal = volts - offset_corrente;   // remove o offset de 2.5V
+
+    float corrente = vsignal / SENSIBILIDADE;
+
+    //proteção contra ruído pequeno
+    if (abs(corrente) < 0.05)   // valores menores que 50mA = 0
+        return 0.0;
+
+    // nunca negativo
+    if (corrente < 0) corrente = 0;
+    // nunca acima do máx possível 
+    if (corrente > 0.54) corrente = 0.54;
+
+    return corrente;
 }
 
 void setCharge(bool on) {
@@ -116,7 +147,7 @@ void handleSerialCommand(String cmd) {
 void taskCore0(void *pvParameters) {
   for (;;) {
     float v_batt = readBatteryVoltage(CANAL_TENSAO);
-    float corrente = readCurrent();
+    float corrente = lerCorrente();
 
     if (mode == AUTO) {
       if (v_batt <= V_BATT_MIN) {
@@ -198,7 +229,9 @@ void setup() {
   Serial.println("Sistema iniciado (modo MANUAL, CHARGE OFF / DISCH OFF).");
   Serial.println("Comandos: AUTO | CHARGE ON | CHARGE OFF | DISCH ON | DISCH OFF | USB ON");
 
-  offset_corrente = lerMediaADC(CANAL_CORRENTE);
+  float raw = lerMediaADC(CANAL_CORRENTE);
+  offset_corrente = rawToVolts(raw);
+
   Serial.print("Offset corrente: ");
   Serial.println(offset_corrente, 4);
 
