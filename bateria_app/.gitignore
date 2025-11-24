@@ -574,6 +574,9 @@ paket-files/
 *.odx.cs
 *.xsd.cs
 
+# ignorando o concatenado
+concatenado.txt
+
 # OpenCover UI analysis results
 OpenCover/
 
