@@ -24,19 +24,20 @@ bateria_app/
 │    └── bateriaN.json          # idealmente aceitando n baterias
 │
 ├── core/
-│   ├── __init__.py
 │   ├── bateria.py              # Classe Battery com atributos e métodos
-│   ├── monitor.py              # Lógica de leitura/simulação de sensores
-│   ├── testes.py               # Gerenciamento dos ciclos de carga/descarga
 │   ├── historico.py            # Salvamento e leitura dos CSVs
-│   └── utils.py                # Funções auxiliares (tempo, formatação etc.)
+│   └── monitor.py              # Lógica de leitura/simulação de sensores
 │
 ├── ui/
-│   ├── __init__.py
-│   ├── tela_selecao.py         # Interface de seleção de bateria
-│   ├── tela_monitoramento.py   # Interface de monitoramento em tempo real
+│   ├── autocomplete.py         # Caixa de texto que permite a escolha através de dados já cadastrados
+│   ├── base_app.py             # Arquivo de programa que intersecciona cada outro ao programa
 │   ├── tela_ciclos.py          # Interface de testes de carga/descarga
-│   └── tela_historico.py       # Histórico de medições e exportação
+│   ├── tela_configuracao.py    # Interface de configuração de teste
+│   ├── tela_historico.py       # Histórico de medições e exportação
+│   ├── tela_selecao.py         # Interface de seleção de bateria
+│   ├── tela_inicial.py         # Menu inicial
+│   ├── tela_monitoramento.py   # Interface de monitoramento em tempo real
+│   └── tela_selecao.py         # Histórico de medições e exportação
 │
 └── assets/
     ├── icons/                  # Ícones e imagens de interface
