@@ -10,28 +10,29 @@ import random
 import errno
 
 # ======== CONFIGURAÇÃO ========
-SYMLINK = '/tmp/ttyVIRTUAL'   # será criado apontando para o slave do PTY
-BAUD_RATE = 115200            # apenas informativo (PTY não exige config)
-BRIDGE_PHYSICAL = False       # se True, tenta abrir /dev/ttyS0 e bridge (veja observação)
-PHYSICAL_PORT = '/dev/ttyS0'  # porta física (se BRIDGE_PHYSICAL=True)
+SYMLINK = '/tmp/ttyVIRTUAL'
+BAUD_RATE = 115200
+BRIDGE_PHYSICAL = False
+PHYSICAL_PORT = '/dev/ttyS0'
 
 V_BATT_MIN = 3.0
-V_BATT_MIN_REENABLE = 3.05
 V_BATT_MAX = 4.2
-V_BATT_MAX_REENABLE = 4.15
+
+MANUAL_STEP = 0.01
+AUTO_STEP = 0.10
+
 CURRENT_NOMINAL = 2.5
 OFFSET_CURRENT = 0.05
 ADC_NOISE = 0.005
-TIMEOUT_USB = 10.0
 
 # ======== ESTADO ========
 mode = "MANUAL"
 forceCharge = False
 forceDischarge = False
 v_batt = 3.7
-lastSerialTime = time.time()
 
-# ======== Funções de simulação (lógica igual à ESP) ========
+
+# ======== Funções ========
 def setCharge(on):
     global forceCharge
     forceCharge = on
@@ -48,205 +49,177 @@ def readCurrent():
     noise = random.uniform(-ADC_NOISE, ADC_NOISE)
     return CURRENT_NOMINAL + OFFSET_CURRENT + noise
 
-# ======== Cria PTY e link simbólico ========
+
+# ======== PTY ========
 def create_pty_and_link():
     master_fd, slave_fd = pty.openpty()
     slave_name = os.ttyname(slave_fd)
-    # configura raw no slave para comportamento "serial"
     try:
         tty.setraw(slave_fd)
-    except Exception:
+    except:
         pass
-    # cria link simbólico (remover antes se existir)
     try:
         if os.path.islink(SYMLINK) or os.path.exists(SYMLINK):
             os.unlink(SYMLINK)
         os.symlink(slave_name, SYMLINK)
-    except PermissionError:
-        print(f"Aviso: sem permissão para criar {SYMLINK}, usando caminho real {slave_name}")
-    except Exception as e:
-        print("Aviso criando symlink:", e)
+    except:
+        pass
     return master_fd, slave_name
 
-# ======== Escrita/leitura no master_fd ========
 def write_master(master_fd, data: bytes):
-    total = 0
-    while total < len(data):
-        try:
-            written = os.write(master_fd, data[total:])
-            if written == 0:
-                raise RuntimeError("write returned 0")
-            total += written
-        except OSError as e:
-            if e.errno == errno.EINTR:
-                continue
-            print("Erro escrevendo no PTY:", e)
-            break
+    try:
+        os.write(master_fd, data)
+    except:
+        pass
 
 def read_master_nonblock(master_fd, timeout=0.1):
-    rlist, _, _ = select.select([master_fd], [], [], timeout)
-    if rlist:
+    r, _, _ = select.select([master_fd], [], [], timeout)
+    if r:
         try:
-            data = os.read(master_fd, 1024)
-            return data
-        except OSError as e:
-            print("Erro lendo PTY:", e)
+            return os.read(master_fd, 1024)
+        except:
             return b''
     return b''
 
-# ======== Handlers de comandos (mesma semântica) ========
+
+# ======== COMANDOS ========
 def handle_cmd_str(s: str, master_fd):
-    global mode, forceCharge, forceDischarge, lastSerialTime
-    cmd = s.strip()
-    lastSerialTime = time.time()
-    print(f"[Serial Received] {cmd}")
-    cu = cmd.upper()
-    if cu == "AUTO":
+    global mode, forceCharge, forceDischarge
+
+    cmd = s.strip().upper()
+
+    if cmd == "AUTO":
         mode = "AUTO"
+
+        # AUTO: inicia garantindo carga
+        forceCharge = True
+        forceDischarge = False
+
         write_master(master_fd, b"Modo AUTOMATICO ativado.\n")
-    elif cu == "CHARGE ON":
+        return
+
+    if cmd == "CHARGE ON":
         mode = "MANUAL"
         setCharge(True)
         write_master(master_fd, b"Modo MANUAL: carga FORCADA ON.\n")
-    elif cu == "CHARGE OFF":
+        return
+
+    if cmd == "CHARGE OFF":
         mode = "MANUAL"
         setCharge(False)
         write_master(master_fd, b"Modo MANUAL: carga FORCADA OFF.\n")
-    elif cu == "DISCH ON":
+        return
+
+    if cmd == "DISCH ON":
         mode = "MANUAL"
         setDischarge(True)
         write_master(master_fd, b"Modo MANUAL: descarga FORCADA ON.\n")
-    elif cu == "DISCH OFF":
+        return
+
+    if cmd == "DISCH OFF":
         mode = "MANUAL"
         setDischarge(False)
         write_master(master_fd, b"Modo MANUAL: descarga FORCADA OFF.\n")
-    elif cu == "USB ON":
-        # só atualiza lastSerialTime
-        pass
-    else:
-        write_master(master_fd, b"Comando invalido.\n")
+        return
 
-# ======== Thread que replica a taskCore0 (envia logs e atualiza v_batt) ========
+    write_master(master_fd, b"Comando invalido.\n")
+
+
+# ======== AUTO + MANUAL SIMULAÇÃO ========
 def core0_task(master_fd):
-    global v_batt
+    global v_batt, mode, forceCharge, forceDischarge
+
     while True:
-        # Lógica AUTO
+
+        # ================================
+        #          MODO AUTOMATICO
+        # ================================
         if mode == "AUTO":
-            if v_batt <= V_BATT_MIN:
-                setDischarge(False)
-                setCharge(True)
-            elif v_batt >= V_BATT_MAX:
-                setCharge(False)
-                setDischarge(True)
-            elif V_BATT_MIN_REENABLE < v_batt < V_BATT_MAX_REENABLE:
-                setCharge(False)
-                setDischarge(False)
+
+            # ✔ 1) Se AMBAS ON → só descarga permanece
+            if forceCharge and forceDischarge:
+                forceCharge = False
+                forceDischarge = True
+
+            # ✔ 2) Se NENHUMA ativa → ativa carga
+            elif not forceCharge and not forceDischarge:
+                forceCharge = True
+                forceDischarge = False
+
+            # ✔ 3) Só carga ativa → sobe tensão
+            if forceCharge and not forceDischarge:
+                v_batt += AUTO_STEP
+
+            # ✔ 4) Só descarga ativa → desce tensão
+            elif forceDischarge and not forceCharge:
+                v_batt -= AUTO_STEP
+
+        # ================================
+        #           MODO MANUAL
+        # ================================
         else:
-            setCharge(forceCharge)
-            setDischarge(forceDischarge)
+            if forceCharge:
+                v_batt += MANUAL_STEP
+            elif forceDischarge:
+                v_batt -= MANUAL_STEP
 
-        # Simula variação de tensão
-        if forceCharge or (mode == "AUTO" and v_batt <= V_BATT_MIN):
-            v_batt += 0.01
-            if v_batt > V_BATT_MAX: v_batt = V_BATT_MAX
-        elif forceDischarge or (mode == "AUTO" and v_batt >= V_BATT_MAX):
-            v_batt -= 0.01
-            if v_batt < V_BATT_MIN: v_batt = V_BATT_MIN
+        # ======== LIMITES DE SEGURANÇA ========
+        if v_batt > V_BATT_MAX:
+            v_batt = V_BATT_MAX
+            # AUTO: forçar descarga no topo
+            if mode == "AUTO":
+                forceCharge = False
+                forceDischarge = True
 
-        msg = (f"Vbat: {readBatteryVoltage():.3f} V | Mode: {mode} | "
-               f"Charge: {'ON' if forceCharge else 'OFF'} | "
-               f"Disch: {'ON' if forceDischarge else 'OFF'} | "
-               f"Corrente: {readCurrent():.3f} A\n")
-        write_master(master_fd, msg.encode('utf-8'))
+        if v_batt < V_BATT_MIN:
+            v_batt = V_BATT_MIN
+            # AUTO: forçar carga no fundo
+            if mode == "AUTO":
+                forceCharge = True
+                forceDischarge = False
+
+        # Log
+        msg = (
+            f"Vbat: {readBatteryVoltage():.3f} V | "
+            f"Mode: {mode} | "
+            f"Charge: {'ON' if forceCharge else 'OFF'} | "
+            f"Disch: {'ON' if forceDischarge else 'OFF'} | "
+            f"Corrente: {readCurrent():.3f} A\n"
+        ).encode()
+
+        write_master(master_fd, msg)
         time.sleep(0.5)
 
-# ======== Thread que lê dados enviados pelo outro app (aparece no master_fd) ========
+
+# ======== LEITOR DE COMANDOS ========
 def master_reader_task(master_fd):
-    buffer = b''
+    buffer = b""
     while True:
         data = read_master_nonblock(master_fd, timeout=0.2)
         if data:
             buffer += data
-            # processa por linhas se houver \n
-            while b'\n' in buffer:
-                line, buffer = buffer.split(b'\n', 1)
-                try:
-                    s = line.decode('utf-8', errors='ignore')
-                except:
-                    s = repr(line)
-                handle_cmd_str(s, master_fd)
+            while b"\n" in buffer:
+                line, buffer = buffer.split(b"\n", 1)
+                handle_cmd_str(line.decode("utf-8", errors="ignore"), master_fd)
         else:
-            # sem dados
             time.sleep(0.05)
 
-# ======== (Opcional) Bridge para porta física ========
-def physical_bridge_thread(master_fd):
-    # só tenta se BRIDGE_PHYSICAL True
-    try:
-        import serial
-    except Exception:
-        print("PySerial não instalado; bridge física desabilitada.")
-        return
-
-    try:
-        phys = serial.Serial(PHYSICAL_PORT, BAUD_RATE, timeout=0)
-        print(f"Bridge: aberto {PHYSICAL_PORT}")
-    except Exception as e:
-        print("Bridge: não foi possível abrir porta física:", e)
-        return
-
-    # forward physical -> master
-    def phys_to_master():
-        while True:
-            try:
-                b = phys.read(1024)
-                if b:
-                    write_master(master_fd, b)
-                else:
-                    time.sleep(0.01)
-            except Exception as e:
-                print("Bridge recv error:", e)
-                break
-
-    # forward master -> physical
-    def master_to_phys():
-        while True:
-            try:
-                data = read_master_nonblock(master_fd, timeout=0.1)
-                if data:
-                    phys.write(data)
-                else:
-                    time.sleep(0.01)
-            except Exception as e:
-                print("Bridge send error:", e)
-                break
-
-    threading.Thread(target=phys_to_master, daemon=True).start()
-    threading.Thread(target=master_to_phys, daemon=True).start()
 
 # ======== MAIN ========
 def main():
     master_fd, slave_name = create_pty_and_link()
-    print("PTY criado.")
-    print("Use esta porta no seu app (slave):", slave_name)
-    if os.path.islink(SYMLINK):
-        print("Ou use o link simbólico:", SYMLINK)
-    print("O simulador está atuando no lado 'device' do PTY (master).")
 
-    # Inicia threads
+    print("PTY criado.")
+    print("Use esta porta no seu app:", slave_name)
+    if os.path.islink(SYMLINK):
+        print("Ou use o link simbolico:", SYMLINK)
+
     threading.Thread(target=core0_task, args=(master_fd,), daemon=True).start()
     threading.Thread(target=master_reader_task, args=(master_fd,), daemon=True).start()
 
-    if BRIDGE_PHYSICAL:
-        threading.Thread(target=physical_bridge_thread, args=(master_fd,), daemon=True).start()
+    while True:
+        time.sleep(1)
 
-    # Mantém rodando
-    try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        print("Saindo...")
 
 if __name__ == "__main__":
     main()
-
