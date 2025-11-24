@@ -34,10 +34,9 @@ bateria_app/
 │   ├── tela_ciclos.py          # Interface de testes de carga/descarga
 │   ├── tela_configuracao.py    # Interface de configuração de teste
 │   ├── tela_historico.py       # Histórico de medições e exportação
-│   ├── tela_selecao.py         # Interface de seleção de bateria
 │   ├── tela_inicial.py         # Menu inicial
 │   ├── tela_monitoramento.py   # Interface de monitoramento em tempo real
-│   └── tela_selecao.py         # Histórico de medições e exportação
+│   └── tela_selecao.py         # Interface de seleção de bateria
 │
 └── assets/
     ├── icons/                  # Ícones e imagens de interface
