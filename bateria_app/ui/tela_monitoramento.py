@@ -76,8 +76,30 @@ class TelaMonitoramento(tb.Frame):
         )
         self.corrente_label.grid(row=0, column=1, padx=40, pady=5, sticky="w")
 
+        self.tempo_execucao_label = tb.Label(
+            frame_medidas,
+            text="Tempo: 0s",
+            font=("Segoe UI", 18, "bold"),
+            foreground="#FFC107"
+        )
+        self.tempo_execucao_label.grid(row=0, column=2, padx=40, pady=5, sticky="w")
+
+        self.descanso_label = tb.Label(
+            frame_medidas,
+            text="Descanso: --",
+            font=("Segoe UI", 18, "bold"),
+            foreground="#FF5722"
+        )
+        self.descanso_label.grid(row=0, column=3, padx=40, pady=5, sticky="w")
+
         frame_medidas.grid_columnconfigure(0, weight=1)
         frame_medidas.grid_columnconfigure(1, weight=1)
+        frame_medidas.grid_columnconfigure(2, weight=1)
+        frame_medidas.grid_columnconfigure(3, weight=1)
+
+        self.ciclo_label.grid_remove()
+        self.descanso_label.grid_remove()
+
 
         # Modo / Carga / Descarga
         frame_status = tb.Frame(conteudo)
@@ -153,6 +175,8 @@ class TelaMonitoramento(tb.Frame):
             self.dados_tempo.clear()
             self.dados_tensao.clear()
             self.tempo_inicial = time.time()
+            self.descanso_em_andamento = False
+            self.tempo_restante_descanso = 0
             self.ax.clear()
             self.ax.set_xlabel("Tempo (s)")
             self.ax.set_ylabel("Tensão (V)")
@@ -166,9 +190,14 @@ class TelaMonitoramento(tb.Frame):
         else:
             self.ciclo_atual = int((self.controller.simulacao_dados.get("ciclo_atual", 0)) or 0)
 
+        # --------------------------------------------------
+        # MODO: CICLOS vs MANUAL
+        # --------------------------------------------------
         tipo = (dados or {}).get("tipo", "")
         if tipo.lower() == "ciclos":
             self.modo_ciclos = True
+
+            # ESP em modo AUTO
             if esp:
                 esp.modo = "AUTO"
                 try:
@@ -176,15 +205,41 @@ class TelaMonitoramento(tb.Frame):
                         esp.bateria_controller.alternar_modo()
                 except Exception:
                     pass
+
+            # Oculta botões de manual
             for btn in [self.btn_carga, self.btn_descarga, self.btn_desativar]:
                 btn.grid_remove()
+
+            # Mostra elementos de ciclos
+            try: self.ciclo_label.grid()           # MOSTRA
+            except: pass
+            try: self.descanso_label.grid()        # MOSTRA
+            except: pass
+
+            # Tempo de execução SEMPRE aparece, então não mexemos nele
+
         else:
             self.modo_ciclos = False
+
+            # ESP em modo MANUAL
             if esp:
                 esp.modo = "MANUAL"
+
+            # Reexibe botões
             for btn in [self.btn_carga, self.btn_descarga, self.btn_desativar]:
                 btn.grid()
 
+            # Esconde ciclo e descanso
+            try: self.ciclo_label.grid_remove()
+            except: pass
+            try: self.descanso_label.grid_remove()
+            except: pass
+
+            # ⚠️ Tempo continua visível -> NÃO remover!
+
+        # --------------------------------------------------
+        # INICIAR ENVIO PERIÓDICO USB ON
+        # --------------------------------------------------
         if esp:
             try:
                 esp.iniciar_envio_periodico("USB ON", intervalo=3)
@@ -319,6 +374,16 @@ class TelaMonitoramento(tb.Frame):
                 self.carga_label.config(text=f"Carga: {esp.carga}")
                 self.descarga_label.config(text=f"Descarga: {esp.descarga}")
 
+                # Atualiza tempo total de execução
+                tempo_total = int(time.time() - self.tempo_inicial)
+                self.tempo_execucao_label.config(text=f"Tempo: {tempo_total}s")
+
+                # Se estiver descansando, mostrar contador regressivo
+                if self.descanso_em_andamento:
+                    self.descanso_label.config(text=f"Descanso: {int(self.tempo_restante_descanso)}s")
+                else:
+                    self.descanso_label.config(text="Descanso: --")
+
             if self.winfo_exists():
                 self.after_id = self.after(1000, self.atualizar_labels)
         except Exception:
@@ -373,16 +438,26 @@ class TelaMonitoramento(tb.Frame):
             tolerancia = 0.01  # 10 mV de margem
 
             def finalizar_teste(mensagem="Teste finalizado"):
+                # 1. Desativar tudo imediatamente
                 try: esp.bateria_controller.desligar_tudo()
-                except Exception: pass
+                except: pass
+
                 try: esp.parar_envio_periodico()
-                except Exception: pass
-                messagebox.showinfo("Teste finalizado", mensagem)
+                except: pass
+
                 try: esp.parar()
-                except Exception: pass
+                except: pass
+
+                # 2. Apagar log e limpar simulação
                 self._apagar_log()
                 self.controller.simulacao_dados = {}
+
+                # 3. Voltar imediatamente para a tela inicial
                 self.controller.show_frame("TelaInicial")
+
+                # 4. Exibir a mensagem *após* já ter voltado
+                self.after(100, lambda: messagebox.showinfo("Teste finalizado", mensagem))
+
 
             # --- Teste de carga ---
             if tipo_teste == "carga" and tensao_carga > 0:
@@ -400,19 +475,51 @@ class TelaMonitoramento(tb.Frame):
 
             # --- Ciclos ---
             if tipo_teste == "ciclos":
+                # Se estamos descansando, não monitoramos mudança de estado
+                if self.descanso_em_andamento:
+                    # Atualiza contagem regressiva
+                    self.tempo_restante_descanso -= 1
+                    if self.tempo_restante_descanso <= 0:
+                        # Descanso acabou — voltar ao AUTO e continuar teste
+                        self.descanso_em_andamento = False
+                        try:
+                            esp.bateria_controller.alternar_modo()
+                        except: pass
+                    return
+
+                # Detecta mudanças de carga ↔ descarga
                 current_charge_state = esp.carga
+
                 if self._prev_carga_state is None:
                     self._prev_carga_state = current_charge_state
                 elif current_charge_state != self._prev_carga_state:
+
+                    # Contou um ciclo
                     self.ciclo_atual += 1
                     self.controller.simulacao_dados["ciclo_atual"] = self.ciclo_atual
                     self._criar_log()
-                    self._prev_carga_state = current_charge_state
                     self.ciclo_label.config(text=f"Ciclo: {self.ciclo_atual}/{self.ciclos_totais}")
+                    self._prev_carga_state = current_charge_state
 
+                    # Verifica se finalizou
                     if self.ciclos_totais and self.ciclo_atual >= self.ciclos_totais:
                         finalizar_teste("Todos os ciclos concluídos. Teste finalizado.")
                         return
+
+                    # Inicia descanso
+                    descanso = int(self.controller.simulacao_dados.get("descanso", 60))
+                    self.descanso_em_andamento = True
+                    self.tempo_restante_descanso = descanso
+                    self.descanso_label.config(text=f"Descanso: {descanso}s")
+
+                    # Desliga carga/descarga no descanso
+                    try:
+                        esp.bateria_controller.desligar_tudo()
+                    except:
+                        pass
+
+                    return
+
 
         except Exception as e:
             print(f"[MONITORAMENTO] Erro geral em atualizar_grafico: {e}")

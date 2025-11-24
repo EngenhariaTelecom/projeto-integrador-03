@@ -58,11 +58,19 @@ class TelaConfiguracao(ttk.Frame):
         self.frame_tipo = ttk.Frame(container)
         self.frame_tipo.pack(pady=10, fill="x")
         ttk.Label(self.frame_tipo, text="Tipo de teste:").pack(side="left", padx=(0,5))
+
         self.tipo_var = tk.StringVar(value="carga")
         ttk.Radiobutton(self.frame_tipo, text="Carga/Descarga", variable=self.tipo_var, value="carga", command=self._toggle_ciclos).pack(side="left", padx=5)
         ttk.Radiobutton(self.frame_tipo, text="Ciclos múltiplos", variable=self.tipo_var, value="ciclos", command=self._toggle_ciclos).pack(side="left", padx=5)
+
         self.ciclos_label = ttk.Label(self.frame_tipo, text="Qtd ciclos:")
         self.ciclos_entry = ttk.Entry(self.frame_tipo, width=5)
+
+        # Tempo de descanso entre ciclos
+        self.descanso_label = ttk.Label(self.frame_tipo, text="Descanso (s):")
+        self.descanso_entry = ttk.Entry(self.frame_tipo, width=7)
+        self.descanso_var = tk.StringVar(value="60")
+
         self.ciclos_var = tk.StringVar(value="1")
         self._toggle_ciclos()
 
@@ -96,12 +104,24 @@ class TelaConfiguracao(ttk.Frame):
 
     def _toggle_ciclos(self):
         if self.tipo_var.get() == "ciclos":
+            # Mostrar QTD ciclos
             self.ciclos_label.pack(side="left", padx=(10,0))
             self.ciclos_entry.pack(side="left")
             self.ciclos_entry.config(textvariable=self.ciclos_var)
+
+            # Mostrar descanso
+            self.descanso_label.pack(side="left", padx=(10,0))
+            self.descanso_entry.pack(side="left")
+            self.descanso_entry.config(textvariable=self.descanso_var)
+
         else:
+            # Esconder tudo
             self.ciclos_label.pack_forget()
             self.ciclos_entry.pack_forget()
+
+            self.descanso_label.pack_forget()
+            self.descanso_entry.pack_forget()
+
 
     def _buscar_esp(self):
         self.status_label.config(text="Status: Buscando ESP...")
@@ -127,6 +147,7 @@ class TelaConfiguracao(ttk.Frame):
         nome_arquivo = self.csv_var.get().strip()
         tipo = self.tipo_var.get()
         ciclos = int(self.ciclos_var.get()) if self.ciclos_var.get().isdigit() else 1
+        descanso = int(self.descanso_var.get()) if self.descanso_var.get().isdigit() else 60
 
         if not porta:
             messagebox.showwarning("Erro", "Selecione uma porta USB.")
@@ -177,6 +198,7 @@ class TelaConfiguracao(ttk.Frame):
             "csv": csv_file,
             "tipo": tipo,
             "ciclos": ciclos,
+            "descanso": descanso,
             "dados_bateria": self.dados_bateria
         }
 
