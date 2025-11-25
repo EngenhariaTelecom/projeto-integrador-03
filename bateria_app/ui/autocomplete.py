@@ -18,9 +18,13 @@ class AutocompleteEntry(ttk.Entry):
             autocomplete_list = []
         self.autocomplete_list = sorted(autocomplete_list, key=str.lower)
 
-        # Variável do Entry
-        self.var = tk.StringVar()
-        self.config(textvariable=self.var)
+        # Se textvariable veio no kwargs, usa ele.
+        if "textvariable" in kwargs:
+            self.var = kwargs["textvariable"]
+        else:
+            self.var = tk.StringVar()
+            self.config(textvariable=self.var)
+
 
         # Placeholder
         self.placeholder = placeholder
@@ -28,10 +32,9 @@ class AutocompleteEntry(ttk.Entry):
         self._set_placeholder()
 
         # Detecta escrita
-        try:
-            self.var.trace_add("write", lambda *a: self.changed())
-        except Exception:
-            self.var.trace("w", self.changed)
+        # Detecta escrita (com método seguro)
+        self._add_trace()
+
 
         # Eventos
         self.bind("<FocusIn>", self._clear_placeholder)
@@ -63,8 +66,22 @@ class AutocompleteEntry(ttk.Entry):
     def _set_placeholder(self, *args):
         if not self.var.get():
             self._has_placeholder = True
+
+            # Remove trace temporariamente, mas só se existir
+            infos = self.var.trace_info()
+            if infos:
+                try:
+                    self.var.trace_vdelete("write", infos[0][1])
+                except Exception:
+                    pass
+
+            # Agora aplica placeholder
             self.var.set(self.placeholder)
             self.config(foreground="grey")
+
+            # Restaura trace
+            self._add_trace()
+
 
     def _clear_placeholder(self, *args):
         if self._has_placeholder:
@@ -208,5 +225,13 @@ class AutocompleteEntry(ttk.Entry):
     # -------------------------
     def _on_click_outside(self, event):
         widget = event.widget
-        if widget not in (self, self.listbox):
-            self.close_listbox()
+        if self.listbox_frame:
+            if widget not in (self, self.listbox, self.listbox_frame, self.scrollbar):
+                self.close_listbox()
+
+    def _add_trace(self):
+        try:
+            self.var.trace_add("write", lambda *a: self.changed())
+        except:
+            self.var.trace("w", self.changed)
+
