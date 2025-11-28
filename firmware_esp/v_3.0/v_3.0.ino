@@ -158,11 +158,17 @@ void taskCore0(void *pvParameters) {
         // Carrega até atingir o máximo
         setDischarge(false);
         setCharge(true);
+        // altera as flags
+        forceCharge = true;
+        forceDischarge = false;
       }
       else {
         // Quando atinge o máximo, inicia descarga
         setCharge(false);
         setDischarge(true);
+        // altera as flags
+        forceCharge = false;
+        forceDischarge = true;
 
         // Quando atingir o mínimo, volta a carregar
         if (v_batt <= V_BATT_MIN) {
