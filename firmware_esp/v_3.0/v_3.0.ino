@@ -92,6 +92,8 @@ float lerCorrente() {
     if (corrente < 0) corrente = 0;
     // nunca acima do máx possível 
     if (corrente > 0.54) corrente = 0.54;
+    // corrente zero se o circuito de descarga estiver desativado
+    if (forceDischarge == false) corrente = 0;
 
     return corrente;
 }
@@ -150,20 +152,27 @@ void taskCore0(void *pvParameters) {
     float corrente = lerCorrente();
 
     if (mode == AUTO) {
-      if (v_batt <= V_BATT_MIN) {
+
+      // --- AUTO-TESTE: ciclo automático completo ---
+      if (v_batt < V_BATT_MAX) {
+        // Carrega até atingir o máximo
         setDischarge(false);
         setCharge(true);
-      } 
-      else if (v_batt >= V_BATT_MAX) {
+      }
+      else {
+        // Quando atinge o máximo, inicia descarga
         setCharge(false);
         setDischarge(true);
-      } 
-      else if (v_batt > V_BATT_MIN_REENABLE && v_batt < V_BATT_MAX_REENABLE) {
-        setCharge(false);
-        setDischarge(false);
+
+        // Quando atingir o mínimo, volta a carregar
+        if (v_batt <= V_BATT_MIN) {
+          setDischarge(false);
+          setCharge(true);
+        }
       }
-    } 
-    else {
+
+    } else {
+      // --- MODO MANUAL ---
       setCharge(forceCharge);
       setDischarge(forceDischarge);
     }
