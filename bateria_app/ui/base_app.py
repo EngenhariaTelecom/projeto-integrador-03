@@ -197,4 +197,4 @@ class BatteryApp(tb.Window):
         except Exception:
             pass
 
-        os._exit(0)
+        self.quit()
