@@ -179,18 +179,9 @@ class ESPReader(threading.Thread):
     def parar(self):
         self.running = False
         self.parar_envio_periodico()
-
         if self.ser:
             try:
                 self.ser.close()
                 print("🔌 Conexão encerrada.")
             except Exception:
                 pass
-            self.ser = None
-
-        # 🔥 GARANTE que a thread morra e libere a porta serial
-        try:
-            if self.is_alive():
-                self.join(timeout=1)
-        except:
-            pass
