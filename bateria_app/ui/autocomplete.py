@@ -46,12 +46,6 @@ class AutocompleteEntry(ttk.Entry):
 
         # Fechar listbox ao clicar fora do entry ou listbox
         self.winfo_toplevel().bind_all("<Button-1>", self._on_click_outside, add="+")
-        # Fecha listbox quando a janela é minimizada, restaurada ou perde foco
-        root = self.winfo_toplevel()
-        root.bind("<Unmap>", lambda e: self.close_listbox())
-        root.bind("<Map>", lambda e: self.close_listbox())
-        root.bind("<FocusOut>", lambda e: self.close_listbox())
-
 
         # Listbox e scrollbar
         self.listbox_up = False
@@ -191,9 +185,6 @@ class AutocompleteEntry(ttk.Entry):
             return
 
         self.listbox_frame = tk.Toplevel(self)
-        root = self.winfo_toplevel()
-        root.bind("<Unmap>", lambda e: self.close_listbox())
-        root.bind("<Map>", lambda e: self.close_listbox())
         self.listbox_frame.wm_overrideredirect(True)
         x = self.winfo_rootx()
         y = self.winfo_rooty() + self.winfo_height()

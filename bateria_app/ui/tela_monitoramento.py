@@ -319,7 +319,6 @@ class TelaMonitoramento(tb.Frame):
             except Exception:
                 pass
 
-
         if os.path.exists(self.LOG_FILE):
             resposta = messagebox.askyesno(
                 "Interromper Simulação",
@@ -439,74 +438,25 @@ class TelaMonitoramento(tb.Frame):
             tolerancia = 0.01  # 10 mV de margem
 
             def finalizar_teste(mensagem="Teste finalizado"):
-                ############################################
-                # 1) DESLIGAR TUDO IMEDIATAMENTE
-                ############################################
-                try:
-                    esp.bateria_controller.desligar_tudo()
-                except Exception:
-                    pass
+                # 1. Desativar tudo imediatamente
+                try: esp.bateria_controller.desligar_tudo()
+                except: pass
 
-                # Para envio periódico ("USB ON")
-                try:
-                    esp.parar_envio_periodico()
-                except Exception:
-                    pass
+                try: esp.parar_envio_periodico()
+                except: pass
 
-                # Para a thread da serial e fecha conexão
-                try:
-                    esp.parar()
-                except Exception:
-                    pass
+                try: esp.parar()
+                except: pass
 
-
-                ############################################
-                # 2) APAGAR LOG E LIMPAR SIMULAÇÃO
-                ############################################
-                try:
-                    self._apagar_log()
-                except:
-                    pass
-
+                # 2. Apagar log e limpar simulação
+                self._apagar_log()
                 self.controller.simulacao_dados = {}
 
-
-                ############################################
-                # 3) PARAR ANIMAÇÃO DO GRÁFICO
-                ############################################
-                try:
-                    if hasattr(self, "ani") and self.ani.event_source:
-                        self.ani.event_source.stop()
-                except Exception:
-                    pass
-
-
-                ############################################
-                # 4) PARAR CALLBACKS after()
-                ############################################
-                try:
-                    if hasattr(self, "after_id") and self.after_id:
-                        self.after_cancel(self.after_id)
-                        self.after_id = None
-                except Exception:
-                    pass
-
-
-                ############################################
-                # 5) LIMPAR BUFFERS DO GRÁFICO
-                ############################################
-                self.dados_tempo.clear()
-                self.dados_tensao.clear()
-
-
-                ############################################
-                # 6) VOLTAR PARA TELA INICIAL E MOSTRAR MSG
-                ############################################
+                # 3. Voltar imediatamente para a tela inicial
                 self.controller.show_frame("TelaInicial")
 
-                # Aguarda UI trocar de tela antes do popup
+                # 4. Exibir a mensagem *após* já ter voltado
                 self.after(100, lambda: messagebox.showinfo("Teste finalizado", mensagem))
-
 
 
             # --- Teste de carga ---
