@@ -182,6 +182,9 @@ class ESPReader(threading.Thread):
                     # sem dados lidos -> continua
                     continue
 
+                # ADICIONE ESSA LINHA AQUI:
+                print("[SERIAL RX]", linha)
+
                 # Ex.: "Vbat: 4.15 V | Mode: AUTO | Charge: ON | Disch: OFF | Corrente: 0.56 A"
                 if linha.startswith("Vbat:"):
                     # print(linha)   # mantenha se quiser debug
@@ -231,7 +234,7 @@ class ESPReader(threading.Thread):
         while self._envio_ativo and self.ser and getattr(self.ser, "is_open", False):
             try:
                 self.ser.write((self._envio_comando + "\n").encode())
-                # print(f"[SERIAL] Enviado: {self._envio_comando}")
+                print(f"📤 Enviado para ESP32: {self._envio_comando}")
             except Exception as e:
                 print(f"[SERIAL] Falha ao enviar '{self._envio_comando}': {e}")
             # aguarda intervalo, mas pode sair se _envio_ativo virar False
