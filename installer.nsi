@@ -1,107 +1,48 @@
-!define APP_NAME "MonitorBateria"
+!define APP_NAME "Monitor de Bateria"
+!define COMPANY_NAME "SeuNome"
 !define VERSION "1.0"
-!define INSTALL_DIR "$PROGRAMFILES64\${APP_NAME}"
+!define INSTALL_DIR "$PROGRAMFILES\${APP_NAME}"
 
-# Diretório onde o PyInstaller gera os arquivos
-!define SRC_DIR "dist\MonitorBateria"
-
-# Ícone do instalador
-!define ICON_FILE "bateria_app\assets\icons\icon.ico"
-
-OutFile "MonitorBateriaInstaller.exe"
-Icon "${ICON_FILE}"
-
+OutFile "installer.exe"
 InstallDir "${INSTALL_DIR}"
+
 RequestExecutionLevel admin
+SetCompress auto
+SetCompressor lzma
 
 Page directory
 Page instfiles
 UninstPage uninstConfirm
 UninstPage instfiles
 
-
-##############################################
-#                 INSTALL                    #
-##############################################
-
-Section "Install Application"
+Section "Instalar"
 
     SetOutPath "$INSTDIR"
 
-    ##############################################
-    #   Copia tudo que o PyInstaller gerou        #
-    ##############################################
+    ; Copia tudo do dist/MonitorBateria (caminho correto)
+    File /r "bateria_app\dist\MonitorBateria\*.*"
 
-    # IMPORTANTE: File /r NÃO aceita aspas e não aceita variáveis com aspas
-    File /r ${SRC_DIR}\*.*
+    ; Atalho Desktop
+    CreateShortcut "$DESKTOP\${APP_NAME}.lnk" "$INSTDIR\MonitorBateria.exe"
 
-    ##############################################
-    #    Copia JSON, CSV, ícones e recursos       #
-    ##############################################
-
-    # Baterias
-    CreateDirectory "$INSTDIR\baterias"
-    File /r bateria_app\baterias\*.*
-
-    # Assets
-    CreateDirectory "$INSTDIR\assets"
-    File /r bateria_app\assets\*.*
-
-
-    ##############################################
-    #                  ATALHOS                    #
-    ##############################################
-
-    # Desktop
-    CreateShortCut "$DESKTOP\${APP_NAME}.lnk" \
-        "$INSTDIR\MonitorBateria.exe" "" "$INSTDIR\MonitorBateria.exe" 0
-
-    # Menu Iniciar
+    ; Atalho Menu Iniciar
     CreateDirectory "$SMPROGRAMS\${APP_NAME}"
+    CreateShortcut "$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk" "$INSTDIR\MonitorBateria.exe"
+    CreateShortcut "$SMPROGRAMS\${APP_NAME}\Desinstalar.lnk" "$INSTDIR\Uninstall.exe"
 
-    CreateShortCut "$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk" \
-        "$INSTDIR\MonitorBateria.exe" "" "$INSTDIR\MonitorBateria.exe" 0
-
-
-    ##############################################
-    #           REGISTRO DE DESINSTALAÇÃO         #
-    ##############################################
-
-    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" \
-        "DisplayName" "${APP_NAME}"
-
-    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" \
-        "InstallLocation" "$INSTDIR"
-
-    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" \
-        "DisplayVersion" "${VERSION}"
-
-    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" \
-        "Publisher" "Monitor Bateria"
-
-    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" \
-        "UninstallString" "$INSTDIR\Uninstall.exe"
-
+    ; Registrar desinstalador
     WriteUninstaller "$INSTDIR\Uninstall.exe"
 
 SectionEnd
 
 
-##############################################
-#                 UNINSTALL                  #
-##############################################
-
 Section "Uninstall"
 
-    # Remove atalhos
     Delete "$DESKTOP\${APP_NAME}.lnk"
     Delete "$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk"
+    Delete "$SMPROGRAMS\${APP_NAME}\Desinstalar.lnk"
     RMDir  "$SMPROGRAMS\${APP_NAME}"
 
-    # Remove pasta de instalação
     RMDir /r "$INSTDIR"
-
-    # Remove chave do registro
-    DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}"
 
 SectionEnd

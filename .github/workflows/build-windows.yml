@@ -36,20 +36,16 @@ jobs:
           --add-data "bateria_app/baterias;baterias" `
           "bateria_app/main.py"
 
-    - name: Prepare InstallerFiles folder
+    - name: Fix dist/ path (matches project tree)
       shell: powershell
       run: |
-        if (Test-Path "InstallerFiles") { Remove-Item "InstallerFiles" -Recurse -Force }
-        mkdir "InstallerFiles"
-
-        Copy-Item "dist/MonitorBateria.exe" "InstallerFiles/MonitorBateria.exe"
-        Copy-Item "bateria_app/assets" "InstallerFiles/assets" -Recurse
-        Copy-Item "bateria_app/baterias" "InstallerFiles/baterias" -Recurse
+        Remove-Item -Recurse -Force bateria_app/dist 2>$null
+        Move-Item dist bateria_app
 
     - name: Install NSIS
       run: choco install nsis -y
 
-    - name: Build installer
+    - name: Build Installer
       shell: powershell
       run: |
         & "C:/Program Files (x86)/NSIS/makensis.exe" "installer.nsi"
@@ -58,4 +54,4 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: MonitorBateriaInstaller
-        path: MonitorBateriaInstaller.exe
+        path: installer.exe
