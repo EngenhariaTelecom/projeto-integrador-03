@@ -36,12 +36,6 @@ jobs:
           --add-data "bateria_app/baterias;baterias" `
           "bateria_app/main.py"
 
-    - name: Fix dist/ path (matches project tree)
-      shell: powershell
-      run: |
-        Remove-Item -Recurse -Force bateria_app/dist 2>$null
-        Move-Item dist bateria_app
-
     - name: Install NSIS
       run: choco install nsis -y
 
@@ -54,4 +48,4 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: MonitorBateriaInstaller
-        path: installer.exe
+        path: MonitorBateriaInstaller.exe

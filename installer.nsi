@@ -1,48 +1,87 @@
-!define APP_NAME "Monitor de Bateria"
-!define COMPANY_NAME "SeuNome"
+!define APP_NAME "MonitorBateria"
 !define VERSION "1.0"
-!define INSTALL_DIR "$PROGRAMFILES\${APP_NAME}"
+!define INSTALL_DIR "$PROGRAMFILES64\${APP_NAME}"
 
-OutFile "installer.exe"
+# --- A pasta usada pelo GitHub Actions ---
+!define SRC_DIR "InstallerFiles"
+
+# Ícone
+!define ICON_FILE "bateria_app\assets\icons\icon.ico"
+
+OutFile "MonitorBateriaInstaller.exe"
+Icon "${ICON_FILE}"
+
 InstallDir "${INSTALL_DIR}"
-
 RequestExecutionLevel admin
-SetCompress auto
-SetCompressor lzma
 
 Page directory
 Page instfiles
 UninstPage uninstConfirm
 UninstPage instfiles
 
-Section "Instalar"
+##############################################
+#                   INSTALL                  #
+##############################################
 
+Section "Install Application"
+
+    SetOverwrite on
     SetOutPath "$INSTDIR"
 
-    ; Copia tudo do dist/MonitorBateria (caminho correto)
-    File /r "bateria_app\dist\MonitorBateria\*.*"
+    ##############################################
+    #         Copia EXE + assets + baterias       #
+    ##############################################
 
-    ; Atalho Desktop
-    CreateShortcut "$DESKTOP\${APP_NAME}.lnk" "$INSTDIR\MonitorBateria.exe"
+    ; OBS: File /r NÃO aceita aspas
+    File /r ${SRC_DIR}\*.*
 
-    ; Atalho Menu Iniciar
+    ##############################################
+    #                  ATALHOS                    #
+    ##############################################
+
+    CreateShortCut "$DESKTOP\${APP_NAME}.lnk" \
+        "$INSTDIR\MonitorBateria.exe" "" "$INSTDIR\MonitorBateria.exe" 0
+
     CreateDirectory "$SMPROGRAMS\${APP_NAME}"
-    CreateShortcut "$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk" "$INSTDIR\MonitorBateria.exe"
-    CreateShortcut "$SMPROGRAMS\${APP_NAME}\Desinstalar.lnk" "$INSTDIR\Uninstall.exe"
 
-    ; Registrar desinstalador
+    CreateShortCut "$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk" \
+        "$INSTDIR\MonitorBateria.exe" "" "$INSTDIR\MonitorBateria.exe" 0
+
+    ##############################################
+    #           REGISTRO DE DESINSTALAÇÃO         #
+    ##############################################
+
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" \
+        "DisplayName" "${APP_NAME}"
+
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" \
+        "InstallLocation" "$INSTDIR"
+
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" \
+        "DisplayVersion" "${VERSION}"
+
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" \
+        "Publisher" "Monitor Bateria"
+
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" \
+        "UninstallString" "$INSTDIR\Uninstall.exe"
+
     WriteUninstaller "$INSTDIR\Uninstall.exe"
 
 SectionEnd
 
+##############################################
+#                  UNINSTALL                 #
+##############################################
 
 Section "Uninstall"
 
     Delete "$DESKTOP\${APP_NAME}.lnk"
     Delete "$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk"
-    Delete "$SMPROGRAMS\${APP_NAME}\Desinstalar.lnk"
     RMDir  "$SMPROGRAMS\${APP_NAME}"
 
     RMDir /r "$INSTDIR"
+
+    DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}"
 
 SectionEnd
