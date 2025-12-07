@@ -22,12 +22,13 @@ jobs:
     - name: Install dependencies
       run: |
         pip install --upgrade pip
-        pip install pyinstaller Pillow ttkbootstrap pyserial
+        pip install pyinstaller Pillow ttkbootstrap pyserial matplotlib
 
     - name: Build EXE with PyInstaller
       shell: powershell
       run: |
         Write-Host "=== Building EXE ==="
+
         pyinstaller `
           --noconfirm `
           --onefile `
@@ -36,6 +37,8 @@ jobs:
           --icon "bateria_app/assets/icons/icon.ico" `
           --add-data "bateria_app/assets;assets" `
           --add-data "bateria_app/baterias;baterias" `
+          --hidden-import matplotlib `
+          --hidden-import matplotlib.backends.backend_tkagg `
           "bateria_app/main.py"
 
         Write-Host "=== Checking EXE existence ==="
@@ -77,7 +80,6 @@ jobs:
             exit 1
         }
 
-        # Copy resources
         Copy-Item "bateria_app/assets" "InstallerFiles/assets" -Recurse
         Copy-Item "bateria_app/baterias" "InstallerFiles/baterias" -Recurse
 

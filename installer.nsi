@@ -20,7 +20,7 @@ UninstPage instfiles
 
 
 ##############################################
-#                 INSTALL                    
+#                 INSTALL
 ##############################################
 
 Section "Install Application"
@@ -32,7 +32,7 @@ Section "Install Application"
     File /r ${SRC_DIR}\*.*
 
     ##############################################
-    #               SHORTCUTS FIXED              #
+    #               SHORTCUTS
     ##############################################
 
     DetailPrint "Creating shortcuts..."
@@ -46,7 +46,7 @@ Section "Install Application"
         "$INSTDIR\MonitorBateria.exe" "" "$INSTDIR\assets\icons\icon.ico" 0
 
     ##############################################
-    #                UNINSTALL ENTRY             #
+    #               UNINSTALL ENTRY
     ##############################################
 
     DetailPrint "Registering uninstall..."
@@ -62,7 +62,7 @@ SectionEnd
 
 
 ##############################################
-#                 UNINSTALL                  
+#                 UNINSTALL
 ##############################################
 
 Section "Uninstall"
