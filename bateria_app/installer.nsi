@@ -2,7 +2,7 @@
 !define VERSION "1.0"
 !define INSTALL_DIR "$PROGRAMFILES64\${APP_NAME}"
 
-# Diretório onde o PyInstaller gerou o EXE (dist/MonitorBateria)
+# Diretório onde o PyInstaller gera os arquivos
 !define SRC_DIR "dist\MonitorBateria"
 
 # Ícone do instalador
@@ -27,30 +27,28 @@ Section "Install Application"
 
     SetOutPath "$INSTDIR"
 
-    #################################################################
-    # Copia tudo que o PyInstaller gerou para a pasta de instalação #
-    #################################################################
-    File /r "${SRC_DIR}\*.*"
-
     ##############################################
-    #      Cópia dos dados EXTERNOS (JSON/CSV)   #
+    #    Copia os arquivos do PyInstaller         #
     ##############################################
 
-    # Cria a pasta baterias (se não existir)
+    # Atenção: File /r NÃO aceita aspas!
+    File /r ${SRC_DIR}\*.*
+
+    ##############################################
+    #       Copia JSON, CSV, ícones, assets       #
+    ##############################################
+
+    # Cria pasta baterias
     CreateDirectory "$INSTDIR\baterias"
+    File /r bateria_app\baterias\*.*
 
-    # Copia os JSON de baterias do projeto original
-    File /r "bateria_app\baterias\*.*"
-
-    # Cria a pasta assets (se quiser manter fora do .exe)
+    # Cria pasta assets
     CreateDirectory "$INSTDIR\assets"
-
-    # Copia todos os assets originais
-    File /r "bateria_app\assets\*.*"
+    File /r bateria_app\assets\*.*
 
 
     ##############################################
-    #               ATALHOS                      #
+    #                  ATALHOS                    #
     ##############################################
 
     # Atalho na Área de Trabalho
@@ -66,17 +64,21 @@ Section "Install Application"
 
 
     ##############################################
-    #     REGISTRO PARA DESINSTALAÇÃO           #
+    #     REGISTRO PARA DESINSTALAÇÃO            #
     ##############################################
 
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" \
         "DisplayName" "${APP_NAME}"
+
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" \
         "InstallLocation" "$INSTDIR"
+
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" \
         "DisplayVersion" "${VERSION}"
+
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" \
         "Publisher" "Monitor Bateria"
+
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" \
         "UninstallString" "$INSTDIR\Uninstall.exe"
 
@@ -84,22 +86,21 @@ Section "Install Application"
 
 SectionEnd
 
-
 ##############################################
 #                 UNINSTALL                  #
 ##############################################
 
 Section "Uninstall"
 
-    # Remove atalhos
+    # Atalhos
     Delete "$DESKTOP\${APP_NAME}.lnk"
     Delete "$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk"
     RMDir "$SMPROGRAMS\${APP_NAME}"
 
-    # Remove pasta de instalação inteira
+    # Remove instalação
     RMDir /r "$INSTDIR"
 
-    # Remove chave no registro
+    # Remove registro
     DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}"
 
 SectionEnd

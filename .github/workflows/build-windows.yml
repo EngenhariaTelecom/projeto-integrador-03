@@ -1,60 +1,59 @@
-name: Build Monitor Bateria
+name: Build Windows Release
 
 on:
   push:
-    branches: ["main"]
-  pull_request:
-    branches: ["main"]
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
-  build:
+  build-windows:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout do repositório
-        uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-      - name: Instalar Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
 
-      - name: Instalar dependências
-        run: |
-          pip install -r bateria_app/requirements.txt
-          pip install pyinstaller
+    - name: Install dependencies
+      run: |
+        pip install --upgrade pip
+        pip install pyinstaller Pillow ttkbootstrap pyserial
 
-      - name: Mostrar árvore de arquivos (debug)
-        run: |
-          tree /f
-        shell: cmd
+    - name: Build EXE with PyInstaller
+      shell: powershell
+      run: |
+        pyinstaller `
+          --noconfirm `
+          --onefile `
+          --windowed `
+          --name "MonitorBateria" `
+          --icon "bateria_app/assets/icons/icon.ico" `
+          --add-data "bateria_app/assets;assets" `
+          --add-data "bateria_app/baterias;baterias" `
+          "bateria_app/main.py"
 
-      - name: Gerar executável com PyInstaller
-        run: |
-          pyinstaller ^
-            --noconfirm ^
-            --windowed ^
-            --clean ^
-            --onedir ^
-            --name MonitorBateria ^
-            --icon "bateria_app/assets/icons/icon.png" ^
-            --add-data "bateria_app/assets;assets" ^
-            --add-data "bateria_app/baterias;baterias" ^
-            bateria_app/main.py
+    - name: Prepare installer folder
+      shell: powershell
+      run: |
+        if (!(Test-Path "InstallerFiles")) { mkdir "InstallerFiles" }
+        Copy-Item "dist/MonitorBateria.exe" "InstallerFiles/MonitorBateria.exe"
+        Copy-Item "bateria_app/assets" "InstallerFiles/assets" -Recurse
+        Copy-Item "bateria_app/baterias" "InstallerFiles/baterias" -Recurse
 
-      - name: Mover o instalador .nsi para workspace
-        run: |
-          copy bateria_app\installer.nsi MonitorBateria_installer.nsi
-        shell: cmd
+    - name: Install NSIS
+      run: choco install nsis -y
 
-      - name: Instalar NSIS
-        run: choco install nsis -y
+    - name: Build installer
+      shell: powershell
+      run: |
+        & "C:/Program Files (x86)/NSIS/makensis.exe" "installer.nsi"
 
-      - name: Gerar instalador .exe via NSIS
-        run: makensis MonitorBateria_installer.nsi
-
-      - name: Upload do instalador
-        uses: actions/upload-artifact@v4
-        with:
-          name: MonitorBateria-Installer
-          path: MonitorBateria_Installer.exe
+    - name: Upload Installer
+      uses: actions/upload-artifact@v4
+      with:
+        name: MonitorBateriaInstaller
+        path: MonitorBateriaInstaller.exe
