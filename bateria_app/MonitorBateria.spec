@@ -5,17 +5,16 @@ block_cipher = None
 import sys
 import os
 
-# Importações ocultas necessárias
 hiddenimports = [
     "PIL.ImageTk",
     "PIL._imagingtk",
     "PIL._tkinter_finder",
 ]
 
-# Dados incluídos
+# Corrigido: incluir conteúdo das pastas
 datas = [
-    ('assets', 'assets'),
-    ('baterias', 'baterias'),
+    ('assets/*', 'assets'),
+    ('baterias/*', 'baterias'),
 ]
 
 a = Analysis(
