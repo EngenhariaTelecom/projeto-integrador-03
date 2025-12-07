@@ -10,6 +10,7 @@ jobs:
     runs-on: windows-latest
 
     steps:
+
     - name: Checkout repository
       uses: actions/checkout@v4
 
@@ -26,6 +27,7 @@ jobs:
     - name: Build EXE with PyInstaller
       shell: powershell
       run: |
+        Write-Host "=== Building EXE ==="
         pyinstaller `
           --noconfirm `
           --onefile `
@@ -36,13 +38,65 @@ jobs:
           --add-data "bateria_app/baterias;baterias" `
           "bateria_app/main.py"
 
+        Write-Host "=== Checking EXE existence ==="
+
+        $exe1 = "dist/MonitorBateria.exe"
+        $exe2 = "dist/MonitorBateria/MonitorBateria.exe"
+
+        if (Test-Path $exe1) {
+            Write-Host "Found exe at: $exe1"
+        }
+        elseif (Test-Path $exe2) {
+            Write-Host "Found exe at: $exe2"
+        }
+        else {
+            Write-Error "MonitorBateria.exe NOT FOUND!"
+            exit 1
+        }
+
+    - name: Prepare InstallerFiles folder
+      shell: powershell
+      run: |
+        Write-Host "=== Preparing InstallerFiles ==="
+
+        if (Test-Path "InstallerFiles") { Remove-Item "InstallerFiles" -Recurse -Force }
+        New-Item -ItemType Directory -Force -Path "InstallerFiles" | Out-Null
+
+        # Detect exe safely
+        $exe1 = "dist/MonitorBateria.exe"
+        $exe2 = "dist/MonitorBateria/MonitorBateria.exe"
+
+        if (Test-Path $exe1) {
+            Copy-Item $exe1 "InstallerFiles/MonitorBateria.exe"
+        }
+        elseif (Test-Path $exe2) {
+            Copy-Item $exe2 "InstallerFiles/MonitorBateria.exe"
+        }
+        else {
+            Write-Error "MonitorBateria.exe not found for copy!"
+            exit 1
+        }
+
+        # Copy resources
+        Copy-Item "bateria_app/assets" "InstallerFiles/assets" -Recurse
+        Copy-Item "bateria_app/baterias" "InstallerFiles/baterias" -Recurse
+
+        Write-Host "=== Final InstallerFiles content ==="
+        Get-ChildItem -Recurse "InstallerFiles"
+
     - name: Install NSIS
       run: choco install nsis -y
 
     - name: Build Installer
       shell: powershell
       run: |
+        Write-Host "=== Building NSIS Installer ==="
         & "C:/Program Files (x86)/NSIS/makensis.exe" "installer.nsi"
+
+        if (!(Test-Path "MonitorBateriaInstaller.exe")) {
+            Write-Error "Installer was NOT generated!"
+            exit 1
+        }
 
     - name: Upload Installer
       uses: actions/upload-artifact@v4
