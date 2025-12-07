@@ -13,3 +13,7 @@
     - Core 0: executa a sua lógica original de medição e controle.
     - Core 1: fica monitorando o timeout da comunicação USB.
 - Se passar 10 segundos sem receber “USB ON”, desliga automaticamente os relés como segurança.
+
+### Versão 4.0
+
+- Melhoria na parte de controle do moto AUTO para garantir carga e descarga completa.
