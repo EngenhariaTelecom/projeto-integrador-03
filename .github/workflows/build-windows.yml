@@ -34,7 +34,7 @@ jobs:
           --icon="assets/icons/battery.ico" `
           --add-data "assets;assets" `
           --add-data "baterias;baterias" `
-          main.py
+          bateria_app/main.py
 
     - name: Prepare installer folder
       shell: powershell
