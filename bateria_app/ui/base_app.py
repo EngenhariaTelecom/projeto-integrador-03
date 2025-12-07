@@ -13,11 +13,11 @@ from ui.tela_monitoramento import TelaMonitoramento
 from ui.tela_ciclos import TelaCiclos
 from ui.tela_historico import TelaHistorico
 
-# import do ESPReader para poder recriar ao retomar
+# Import do ESPReader para poder recriar ao retomar
 try:
     from core.monitor import ESPReader
 except Exception:
-    ESPReader = None  # se não disponível, continuamos mas sem reconectar serial
+    ESPReader = None  # se não disponível, o app continua mas sem conexão serial
 
 
 class BatteryApp(tb.Window):
@@ -27,11 +27,12 @@ class BatteryApp(tb.Window):
         self.geometry("1200x700")
 
         # Comunicação com ESP
-        self.esp_reader = None
-        self.simulacao_dados = {}
+        self.esp_reader = None          # instância ativa do ESPReader
+        self.simulacao_dados = {}       # dados carregados ou em execução
 
-        # Arquivo de log
+        # Arquivo LOG
         self.log_file = os.path.join(os.getcwd(), "assets", "dados", "simulacao_log.json")
+
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
 
         # Ícone
@@ -51,87 +52,131 @@ class BatteryApp(tb.Window):
         self.container.grid_rowconfigure(0, weight=1)
         self.container.grid_columnconfigure(0, weight=1)
 
-        # Criação de telas
+        # Criação de todas as telas
         self.frames = {}
-        for Tela in (TelaInicial, TelaSelecao, TelaConfiguracao, TelaMonitoramento, TelaCiclos, TelaHistorico):
+        for Tela in (
+            TelaInicial,
+            TelaSelecao,
+            TelaConfiguracao,
+            TelaMonitoramento,
+            TelaCiclos,
+            TelaHistorico
+        ):
             frame = Tela(parent=self.container, controller=self)
             self.frames[Tela.__name__] = frame
             frame.grid(row=0, column=0, sticky="nsew")
 
-        # Detectar simulação interrompida
+        # Verifica se existe uma simulação interrompida
         self._verificar_log()
 
+    # ======================================================================
+    # RETOMADA DE SIMULAÇÃO
+    # ======================================================================
     def _verificar_log(self):
-        if os.path.exists(self.log_file):
-            try:
-                with open(self.log_file, "r", encoding="utf-8") as f:
-                    log_data = json.load(f)
-                resposta = messagebox.askyesno(
-                    "Retomar Simulação",
-                    "Foi detectada uma simulação interrompida.\nDeseja continuar de onde parou?"
-                )
-                if resposta:
-                    # salva nos dados do app
-                    self.simulacao_dados = log_data
-
-                    # tenta recriar e iniciar ESPReader se a porta estiver no log
-                    porta = log_data.get("porta")
-                    csv_path = log_data.get("csv")
-                    if ESPReader is not None and porta:
-                        try:
-                            esp = ESPReader(porta=porta)
-                            # garante que o esp saiba qual csv usar (mesmo caminho absoluto)
-                            if csv_path:
-                                try:
-                                    esp.definir_csv(csv_path)
-                                except Exception:
-                                    pass
-                            # guarda referência no app e inicia thread (daemon)
-                            self.esp_reader = esp
-                            self.esp_reader.start()
-                            # deixa controller apontando também
-                            # (algumas telas leem controller.esp_reader)
-                            time.sleep(0.05)  # pequena margem para thread iniciar (não bloqueante)
-                        except Exception as e:
-                            print("Não foi possível criar ESPReader ao retomar:", e)
-
-                    # carregar tela de monitoramento com retomar=True
-                    frame = self.frames["TelaMonitoramento"]
-                    # chamar atualizar_dados com retomar=True
-                    try:
-                        frame.atualizar_dados(self.simulacao_dados, retomar=True)
-                    except TypeError:
-                        # se versão antiga do método atualizar_dados (sem retomar param)
-                        frame.atualizar_dados(self.simulacao_dados)
-                    self.show_frame("TelaMonitoramento")
-                else:
-                    try:
-                        os.remove(self.log_file)
-                    except Exception:
-                        pass
-                    self.show_frame("TelaInicial")
-            except Exception as e:
-                print("Erro ao ler log:", e)
-                self.show_frame("TelaInicial")
-        else:
+        """Verifica se houve uma simulação interrompida e tenta retomar."""
+        if not os.path.exists(self.log_file):
             self.show_frame("TelaInicial")
+            return
 
+        try:
+            with open(self.log_file, "r", encoding="utf-8") as f:
+                log_data = json.load(f)
+        except Exception as e:
+            print("Erro ao ler log:", e)
+            self.show_frame("TelaInicial")
+            return
+
+        resposta = messagebox.askyesno(
+            "Retomar Simulação",
+            "Foi detectada uma simulação interrompida.\nDeseja continuar de onde parou?"
+        )
+
+        if not resposta:
+            try:
+                os.remove(self.log_file)
+            except:
+                pass
+            self.show_frame("TelaInicial")
+            return
+
+        # ------------------------------------------------------------
+        # SIM — RETOMAR
+        # ------------------------------------------------------------
+        self.simulacao_dados = log_data
+
+        porta = log_data.get("porta")
+        csv_path = log_data.get("csv")
+        ciclo_salvo = log_data.get("ciclo_atual", 0)
+
+        # Criar novo ESPReader
+        if ESPReader is not None and porta:
+            try:
+                esp = ESPReader(porta=porta)
+
+                # ESSENCIAL → linka controller
+                esp.controller = self
+
+                # Define CSV corretamente
+                if csv_path:
+                    try:
+                        esp.definir_csv(csv_path)
+                    except:
+                        pass
+
+                # Sincroniza ciclo armazenado
+                try:
+                    esp.set_ciclo(ciclo_salvo)
+                except:
+                    pass
+
+                # Iniciar thread de leitura
+                self.esp_reader = esp
+                self.esp_reader.start()
+
+                # Pequena pausa para iniciar sem travar a GUI
+                time.sleep(0.05)
+
+                # IMPORTANTÍSSIMO → iniciar envio periódico e gravação
+                try:
+                    esp.iniciar_envio_periodico("USB ON", intervalo=3)
+                except Exception as e:
+                    print("Falha ao iniciar envio periódico na retomada:", e)
+
+                print("✔ Retomada: ESPReader reiniciado com sucesso.")
+
+            except Exception as e:
+                print("Não foi possível recriar ESPReader ao retomar:", e)
+
+        # Envia dados para tela Monitoramento
+        frame = self.frames["TelaMonitoramento"]
+        try:
+            frame.atualizar_dados(self.simulacao_dados, retomar=True)
+        except TypeError:
+            # compatibilidade com versões antigas do método
+            frame.atualizar_dados(self.simulacao_dados)
+
+        self.show_frame("TelaMonitoramento")
+
+    # ======================================================================
+    # TROCA DE TELAS
+    # ======================================================================
     def show_frame(self, nome):
-        """Mostra a tela indicada pelo nome da classe"""
         frame = self.frames[nome]
 
-        # Se for Monitoramento, atualiza dados e cria log
+        # Quando entra em Monitoramento manualmente
         if nome == "TelaMonitoramento" and hasattr(frame, "atualizar_dados"):
             frame.atualizar_dados(self.simulacao_dados)
             frame._criar_log()
 
-        # Atualiza histórico para voltar à TelaInicial
         if nome == "TelaHistorico":
             if hasattr(frame, "btn_voltar"):
                 frame.btn_voltar.config(command=lambda: self.show_frame("TelaInicial"))
 
         frame.tkraise()
 
+    # ======================================================================
+    # VOLTAR PARA TELA INICIAL (COM LOG)
+    # ======================================================================
     def voltar_tela_inicial_com_log(self):
         if not self.simulacao_dados:
             self.show_frame("TelaInicial")
@@ -141,60 +186,73 @@ class BatteryApp(tb.Window):
             "Interromper Simulação",
             "Deseja interromper a leitura de dados?\nSe sim, o arquivo de log será apagado."
         )
-        if resposta:
-            if self.esp_reader:
-                try:
-                    self.esp_reader.parar()
-                except Exception:
-                    pass
-            if os.path.exists(self.log_file):
-                try:
-                    os.remove(self.log_file)
-                except Exception:
-                    pass
-            self.simulacao_dados = {}
-            self.show_frame("TelaInicial")
+        if not resposta:
+            return
 
-    def on_closing(self):
-        if hasattr(self, "frames") and "TelaMonitoramento" in self.frames:
-            # Só pergunta se estiver na tela de monitoramento e log existe
-            if self.frames["TelaMonitoramento"].winfo_ismapped() and os.path.exists(self.log_file):
-                from tkinter import messagebox
-                resposta = messagebox.askyesno(
-                    "Interromper Simulação",
-                    "Deseja interromper a leitura de dados e fechar o app?"
-                )
-                if not resposta:
-                    return  # Cancela o fechamento
-
-        # Para ESPReader
-        if self.esp_reader is not None:
+        if self.esp_reader:
             try:
                 self.esp_reader.parar()
-            except Exception:
+            except:
                 pass
-        # Remove arquivo de log
+
         if os.path.exists(self.log_file):
             try:
                 os.remove(self.log_file)
-            except Exception:
+            except:
                 pass
 
-        # Para frames que usam after ou matplotlib
+        self.simulacao_dados = {}
+        self.show_frame("TelaInicial")
+
+    # ======================================================================
+    # FECHAR A APLICAÇÃO
+    # ======================================================================
+    def on_closing(self):
+        """Fecha o app de forma limpa."""
+        fechar_agora = True
+
+        # Se tela de monitoramento está aberta e existe log, perguntar
+        if (
+            hasattr(self, "frames")
+            and "TelaMonitoramento" in self.frames
+            and self.frames["TelaMonitoramento"].winfo_ismapped()
+            and os.path.exists(self.log_file)
+        ):
+            resposta = messagebox.askyesno(
+                "Interromper Simulação",
+                "Deseja interromper a leitura de dados e fechar o app?"
+            )
+            fechar_agora = resposta
+
+        if not fechar_agora:
+            return
+
+        # Parar ESPReader
+        if self.esp_reader:
+            try:
+                self.esp_reader.parar()
+            except:
+                pass
+
+        # Apagar log
+        if os.path.exists(self.log_file):
+            try:
+                os.remove(self.log_file)
+            except:
+                pass
+
+        # Destruir frames com animações / after
         for frame in getattr(self, "frames", {}).values():
             try:
                 if hasattr(frame, 'ani') and frame.ani.event_source:
-                    try:
-                        frame.ani.event_source.stop()
-                    except Exception:
-                        pass
+                    frame.ani.event_source.stop()
                 frame.destroy()
-            except Exception:
+            except:
                 pass
 
         try:
             self.destroy()
-        except Exception:
+        except:
             pass
 
         os._exit(0)

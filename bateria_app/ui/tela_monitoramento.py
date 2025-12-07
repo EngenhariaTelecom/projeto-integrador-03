@@ -33,8 +33,9 @@ class TelaMonitoramento(tb.Frame):
         self.ciclos_totais = 0
         self.ciclo_atual = 0
         self._prev_carga_state = None  # para detectar transições de carga/descarga
+        self._prev_disch_state = None
 
-        # Layout
+        # Layout (mantive seu layout original)
         conteudo = tb.Frame(self)
         conteudo.pack(padx=10, pady=10, fill="both", expand=True)
 
@@ -190,6 +191,13 @@ class TelaMonitoramento(tb.Frame):
         else:
             self.ciclo_atual = int((self.controller.simulacao_dados.get("ciclo_atual", 0)) or 0)
 
+        # Se houver ESPReader, sincroniza ciclo inicial no cache do ESP
+        if esp:
+            try:
+                esp.set_ciclo(self.ciclo_atual)
+            except:
+                pass
+
         # --------------------------------------------------
         # MODO: CICLOS vs MANUAL
         # --------------------------------------------------
@@ -216,8 +224,6 @@ class TelaMonitoramento(tb.Frame):
             try: self.descanso_label.grid()        # MOSTRA
             except: pass
 
-            # Tempo de execução SEMPRE aparece, então não mexemos nele
-
         else:
             self.modo_ciclos = False
 
@@ -235,14 +241,17 @@ class TelaMonitoramento(tb.Frame):
             try: self.descanso_label.grid_remove()
             except: pass
 
-            # ⚠️ Tempo continua visível -> NÃO remover!
-
         # --------------------------------------------------
-        # INICIAR ENVIO PERIÓDICO USB ON
+        # INICIAR ENVIO PERIÓDICO USB ON (ESPReader fará gravação periódica)
         # --------------------------------------------------
         if esp:
             try:
                 esp.iniciar_envio_periodico("USB ON", intervalo=3)
+                # sincroniza ciclo no esp (caso já exista)
+                try:
+                    esp.set_ciclo(self.ciclo_atual)
+                except:
+                    pass
                 print("[MONITORAMENTO] Envio periódico iniciado.")
             except Exception as e:
                 print(f"[MONITORAMENTO] Falha ao iniciar envio periódico: {e}")
@@ -270,7 +279,10 @@ class TelaMonitoramento(tb.Frame):
 
     def _apagar_log(self):
         if os.path.exists(self.LOG_FILE):
-            os.remove(self.LOG_FILE)
+            try:
+                os.remove(self.LOG_FILE)
+            except:
+                pass
 
     # =========================
     # Botões / ações
@@ -393,6 +405,8 @@ class TelaMonitoramento(tb.Frame):
     # Atualização do gráfico e checagem de término
     # =========================
     def atualizar_grafico(self, frame):
+        
+
         esp = getattr(self.controller, "esp_reader", None)
         if not esp or esp.ultima_tensao is None:
             return
@@ -412,12 +426,7 @@ class TelaMonitoramento(tb.Frame):
             self.ax.grid(True)
             self.canvas.draw()
 
-            # Salva CSV se aplicável
-            try:
-                if hasattr(esp, "salvar_csv") and esp.arquivo_csv:
-                    esp.salvar_csv(esp.ultima_tensao, esp.corrente)
-            except Exception as e:
-                print(f"[MONITORAMENTO] Erro ao salvar CSV via ESPReader: {e}")
+            # OBS: REMOVIDA gravação direta aqui. ESPReader controla gravação periódica.
 
             # Dados para análise de encerramento
             dados_bat = self.controller.simulacao_dados.get("dados_bateria", {}) or {}
@@ -427,100 +436,110 @@ class TelaMonitoramento(tb.Frame):
             try:
                 tensao_carga = float(str(dados_bat.get("tensao_carga", "")).replace(",", ".") or 0)
             except Exception:
-                print(f"[MONITORAMENTO] Tensão de carga inválida)")
                 tensao_carga = 0.0
             try:
                 tensao_descarga = float(str(dados_bat.get("tensao_descarga", "")).replace(",", ".") or 0)
             except Exception:
-                print(f"[MONITORAMENTO] Tensão de descarga inválida)")
                 tensao_descarga = 0.0
 
-            tolerancia = 0.01  # 10 mV de margem
+            tolerancia = 0.01  # 10 mV
 
+            # ============================
+            # Finalização manual/carga/descarga
+            # ============================
             def finalizar_teste(mensagem="Teste finalizado"):
-                # 1. Desativar tudo imediatamente
+                # Para tudo imediatamente
                 try: esp.bateria_controller.desligar_tudo()
                 except: pass
-
                 try: esp.parar_envio_periodico()
                 except: pass
-
                 try: esp.parar()
                 except: pass
 
-                # 2. Apagar log e limpar simulação
+                # limpar
                 self._apagar_log()
                 self.controller.simulacao_dados = {}
 
-                # 3. Voltar imediatamente para a tela inicial
                 self.controller.show_frame("TelaInicial")
-
-                # 4. Exibir a mensagem *após* já ter voltado
                 self.after(100, lambda: messagebox.showinfo("Teste finalizado", mensagem))
-
 
             # --- Teste de carga ---
             if tipo_teste == "carga" and tensao_carga > 0:
                 if esp.ultima_tensao >= (tensao_carga - tolerancia):
-                    print(f"[MONITORAMENTO] Tensão de carga atingida ({esp.ultima_tensao:.3f} V ≥ {tensao_carga:.3f} V)")
                     finalizar_teste("Tensão de carga atingida. Teste finalizado.")
                     return
 
             # --- Teste de descarga ---
             if tipo_teste == "carga" and tensao_descarga > 0:
                 if esp.ultima_tensao <= (tensao_descarga + tolerancia):
-                    print(f"[MONITORAMENTO] Tensão de descarga atingida ({esp.ultima_tensao:.3f} V ≤ {tensao_descarga:.3f} V)")
                     finalizar_teste("Tensão de descarga atingida. Teste finalizado.")
                     return
 
-            # --- Ciclos ---
+            # ============================
+            #          CICLOS
+            # ============================
             if tipo_teste == "ciclos":
-                # Se estamos descansando, não monitoramos mudança de estado
+
+                # DESCANSO
                 if self.descanso_em_andamento:
-                    # Atualiza contagem regressiva
                     self.tempo_restante_descanso -= 1
                     if self.tempo_restante_descanso <= 0:
-                        # Descanso acabou — voltar ao AUTO e continuar teste
                         self.descanso_em_andamento = False
+
+                        self._prev_carga_state = esp.carga
+                        self._prev_disch_state = esp.descarga
+
                         try:
                             esp.bateria_controller.alternar_modo()
-                        except: pass
+                        except:
+                            pass
                     return
 
-                # Detecta mudanças de carga ↔ descarga
-                current_charge_state = esp.carga
+                charge = esp.carga
+                disch = esp.descarga
 
-                if self._prev_carga_state is None:
-                    self._prev_carga_state = current_charge_state
-                elif current_charge_state != self._prev_carga_state:
+                if not hasattr(self, "_prev_disch_state") or self._prev_carga_state is None:
+                    self._prev_carga_state = charge
+                    self._prev_disch_state = disch
+                    return
 
-                    # Contou um ciclo
+                troca_valida = (
+                    self._prev_disch_state == "ON" and disch == "OFF" and charge == "ON"
+                ) or (
+                    self._prev_carga_state == "ON" and charge == "OFF" and disch == "ON"
+                )
+
+                # Atualiza estados
+                self._prev_carga_state = charge
+                self._prev_disch_state = disch
+
+                if troca_valida:
                     self.ciclo_atual += 1
+                    # atualiza cache do ESP para a gravação
+                    try:
+                        esp.set_ciclo(self.ciclo_atual)
+                    except:
+                        pass
+
                     self.controller.simulacao_dados["ciclo_atual"] = self.ciclo_atual
                     self._criar_log()
                     self.ciclo_label.config(text=f"Ciclo: {self.ciclo_atual}/{self.ciclos_totais}")
-                    self._prev_carga_state = current_charge_state
 
-                    # Verifica se finalizou
                     if self.ciclos_totais and self.ciclo_atual >= self.ciclos_totais:
                         finalizar_teste("Todos os ciclos concluídos. Teste finalizado.")
                         return
 
-                    # Inicia descanso
                     descanso = int(self.controller.simulacao_dados.get("descanso", 60))
                     self.descanso_em_andamento = True
                     self.tempo_restante_descanso = descanso
                     self.descanso_label.config(text=f"Descanso: {descanso}s")
 
-                    # Desliga carga/descarga no descanso
                     try:
                         esp.bateria_controller.desligar_tudo()
                     except:
                         pass
 
                     return
-
-
         except Exception as e:
             print(f"[MONITORAMENTO] Erro geral em atualizar_grafico: {e}")
             pass
@@ -533,6 +552,10 @@ class TelaMonitoramento(tb.Frame):
         if esp:
             try:
                 esp.parar_envio_periodico()
+            except Exception:
+                pass
+            try:
+                esp.parar()
             except Exception:
                 pass
         if hasattr(self, 'after_id') and self.after_id:

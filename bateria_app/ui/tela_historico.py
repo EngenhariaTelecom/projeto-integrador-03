@@ -103,14 +103,46 @@ class TelaHistorico(tb.Frame):
         tempos, tensoes = self.historico.carregar_dados(nome_arquivo)
 
         self.ax.clear()
-        if tempos and tensoes:
-            self.ax.plot(tempos, tensoes, color='tab:green')
-            self.ax.set_title(f"Tensão vs Tempo — {nome_arquivo}")
+        if not tempos or not tensoes:
+            # sem dados válidos — informa e atualiza o canvas
+            self.ax.set_title(f"Nenhum dado válido em {nome_arquivo}")
             self.ax.set_xlabel("Tempo (s)")
             self.ax.set_ylabel("Tensão (V)")
-            self.ax.set_ylim(min(tensoes) * 0.95, max(tensoes) * 1.05)
             self.ax.grid(True)
-        else:
-            self.ax.set_title(f"Nenhum dado válido em {nome_arquivo}")
+            self.canvas.draw()
+            return
 
+        # Ordena por tempo caso o CSV não esteja em ordem (segurança)
+        try:
+            paired = sorted(zip(tempos, tensoes), key=lambda p: p[0])
+            tempos, tensoes = zip(*paired)
+        except Exception:
+            # se algo falhar, segue com os dados originais
+            pass
+
+        # Converte para listas (podem ser tuplas após zip)
+        tempos = list(tempos)
+        tensoes = list(tensoes)
+
+        # Plota normalmente
+        self.ax.plot(tempos, tensoes, color='tab:green')
+        self.ax.set_title(f"Tensão vs Tempo — {nome_arquivo}")
+        self.ax.set_xlabel("Tempo (s)")
+        self.ax.set_ylabel("Tensão (V)")
+        # Ajusta limites do eixo Y de forma segura:
+        try:
+            vmin = min(tensoes)
+            vmax = max(tensoes)
+            if vmin == vmax:
+                # único valor: dá um range pequeno em torno dele
+                delta = abs(vmin) * 0.02 if abs(vmin) > 0 else 0.02
+                self.ax.set_ylim(vmin - delta, vmax + delta)
+            else:
+                self.ax.set_ylim(vmin * 0.95, vmax * 1.05)
+        except Exception:
+            # fallback simples
+            pass
+
+        # Não força xlim iniciar em 0 — aceita que o primeiro tempo seja >0
+        self.ax.grid(True)
         self.canvas.draw()

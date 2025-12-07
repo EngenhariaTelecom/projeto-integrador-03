@@ -174,7 +174,15 @@ class TelaConfiguracao(ttk.Frame):
                     # Limpa e reescreve cabeçalho
                     with open(csv_file, "w", newline='') as f:
                         writer = csv.writer(f)
-                        writer.writerow(["Tempo (s)", "Tensao (V)", "Corrente (A)", "Modo", "Carga", "Descarga"])
+                        writer.writerow([
+                            "Tempo (s)",
+                            "Tensao (V)",
+                            "Corrente (A)",
+                            "Modo",
+                            "Carga",
+                            "Descarga",
+                            "Ciclo"
+                        ])
                     print(f"🧹 Arquivo sobrescrito e cabeçalho recriado: {csv_file}")
                     break
                 except Exception as e:
