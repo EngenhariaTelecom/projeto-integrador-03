@@ -19,6 +19,7 @@ Page instfiles
 UninstPage uninstConfirm
 UninstPage instfiles
 
+
 ##############################################
 #                 INSTALL                    #
 ##############################################
@@ -28,21 +29,21 @@ Section "Install Application"
     SetOutPath "$INSTDIR"
 
     ##############################################
-    #    Copia os arquivos do PyInstaller         #
+    #   Copia tudo que o PyInstaller gerou        #
     ##############################################
 
-    # Atenção: File /r NÃO aceita aspas!
+    # IMPORTANTE: File /r NÃO aceita aspas e não aceita variáveis com aspas
     File /r ${SRC_DIR}\*.*
 
     ##############################################
-    #       Copia JSON, CSV, ícones, assets       #
+    #    Copia JSON, CSV, ícones e recursos       #
     ##############################################
 
-    # Cria pasta baterias
+    # Baterias
     CreateDirectory "$INSTDIR\baterias"
     File /r bateria_app\baterias\*.*
 
-    # Cria pasta assets
+    # Assets
     CreateDirectory "$INSTDIR\assets"
     File /r bateria_app\assets\*.*
 
@@ -51,20 +52,19 @@ Section "Install Application"
     #                  ATALHOS                    #
     ##############################################
 
-    # Atalho na Área de Trabalho
+    # Desktop
     CreateShortCut "$DESKTOP\${APP_NAME}.lnk" \
-        "$INSTDIR\${APP_NAME}.exe" "" "$INSTDIR\${APP_NAME}.exe" 0
+        "$INSTDIR\MonitorBateria.exe" "" "$INSTDIR\MonitorBateria.exe" 0
 
-    # Pasta no Menu Iniciar
+    # Menu Iniciar
     CreateDirectory "$SMPROGRAMS\${APP_NAME}"
 
-    # Atalho no Menu Iniciar
     CreateShortCut "$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk" \
-        "$INSTDIR\${APP_NAME}.exe" "" "$INSTDIR\${APP_NAME}.exe" 0
+        "$INSTDIR\MonitorBateria.exe" "" "$INSTDIR\MonitorBateria.exe" 0
 
 
     ##############################################
-    #     REGISTRO PARA DESINSTALAÇÃO            #
+    #           REGISTRO DE DESINSTALAÇÃO         #
     ##############################################
 
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}" \
@@ -86,21 +86,22 @@ Section "Install Application"
 
 SectionEnd
 
+
 ##############################################
 #                 UNINSTALL                  #
 ##############################################
 
 Section "Uninstall"
 
-    # Atalhos
+    # Remove atalhos
     Delete "$DESKTOP\${APP_NAME}.lnk"
     Delete "$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk"
-    RMDir "$SMPROGRAMS\${APP_NAME}"
+    RMDir  "$SMPROGRAMS\${APP_NAME}"
 
-    # Remove instalação
+    # Remove pasta de instalação
     RMDir /r "$INSTDIR"
 
-    # Remove registro
+    # Remove chave do registro
     DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}"
 
 SectionEnd

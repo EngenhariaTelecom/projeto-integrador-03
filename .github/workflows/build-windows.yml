@@ -36,10 +36,12 @@ jobs:
           --add-data "bateria_app/baterias;baterias" `
           "bateria_app/main.py"
 
-    - name: Prepare installer folder
+    - name: Prepare InstallerFiles folder
       shell: powershell
       run: |
-        if (!(Test-Path "InstallerFiles")) { mkdir "InstallerFiles" }
+        if (Test-Path "InstallerFiles") { Remove-Item "InstallerFiles" -Recurse -Force }
+        mkdir "InstallerFiles"
+
         Copy-Item "dist/MonitorBateria.exe" "InstallerFiles/MonitorBateria.exe"
         Copy-Item "bateria_app/assets" "InstallerFiles/assets" -Recurse
         Copy-Item "bateria_app/baterias" "InstallerFiles/baterias" -Recurse
