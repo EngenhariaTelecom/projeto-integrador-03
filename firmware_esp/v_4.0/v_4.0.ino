@@ -17,7 +17,7 @@ const int PIN_CHARGE_CTRL_1 = 25;
 const int PIN_CHARGE_CTRL_2 = 26;
 const int PIN_DISCHARGE_CTRL = 27;
 
-float calib_factor = 1.0;
+float calib_factor = 1.016;
 
 const float ADS_VFSR = 4.096f;
 const float ADC_COUNTS = 32767.0f;
@@ -69,7 +69,7 @@ float readBatteryVoltage(uint8_t ch) {
   }
 
   // Caso contrário, bateria conectada → apenas converter normalmente
-  float v_real = v_adc * DIVISOR;
+  float v_real = (v_adc * DIVISOR) * calib_factor;
   return v_real;
 }
 
