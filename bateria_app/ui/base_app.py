@@ -73,7 +73,6 @@ class BatteryApp(tb.Window):
     # RETOMADA DE SIMULAÇÃO
     # ======================================================================
     def _verificar_log(self):
-        """Verifica se houve uma simulação interrompida e tenta retomar."""
         if not os.path.exists(self.log_file):
             self.show_frame("TelaInicial")
             return
@@ -99,9 +98,9 @@ class BatteryApp(tb.Window):
             self.show_frame("TelaInicial")
             return
 
-        # ------------------------------------------------------------
-        # LOG → SIMULACAO_DADOS (COM CAPACIDADE E DESCANSO)
-        # ------------------------------------------------------------
+        # --------------------------------------------
+        # RESTAURA DADOS
+        # --------------------------------------------
         self.simulacao_dados = {
             "porta": log_data.get("serial"),
             "csv": log_data.get("arquivo_csv"),
@@ -109,43 +108,38 @@ class BatteryApp(tb.Window):
             "ciclos": log_data.get("ciclos_totais", 0),
             "ciclo_atual": log_data.get("ciclo_atual", 0),
             "descanso": log_data.get("descanso", 0),
+            "descanso_restante": log_data.get("descanso_restante", 0),
+            "tempo_decorrido": log_data.get("tempo_decorrido", 0),
             "dados_bateria": {
-                "nome": log_data.get("bateria", "---"),
-                "capacidade": log_data.get("capacidade", "---")
-            }
+                "nome": log_data.get("bateria"),
+                "capacidade": log_data.get("capacidade")
+            },
+            "_retomada": True   # 🔴 FLAG CRÍTICA
         }
 
-        porta = self.simulacao_dados.get("porta")
-        csv_path = self.simulacao_dados.get("csv")
-        ciclo_salvo = self.simulacao_dados.get("ciclo_atual", 0)
+        # --------------------------------------------
+        # REABRE ESP
+        # --------------------------------------------
+        if ESPReader and self.simulacao_dados["porta"]:
+            esp = ESPReader(porta=self.simulacao_dados["porta"])
+            esp.controller = self
 
-        # ------------------------------------------------------------
-        # REABRE SERIAL
-        # ------------------------------------------------------------
-        if ESPReader is not None and porta:
-            try:
-                esp = ESPReader(porta=porta)
-                esp.controller = self
+            esp.definir_csv(
+                self.simulacao_dados["csv"],
+                retomar=True,
+                tempo_decorrido=self.simulacao_dados["tempo_decorrido"]
+            )
 
-                if csv_path:
-                    esp.definir_csv(csv_path)
+            esp.set_ciclo(self.simulacao_dados["ciclo_atual"])
 
-                esp.set_ciclo(ciclo_salvo)
+            self.esp_reader = esp
+            esp.start()
+            esp.iniciar_envio_periodico("USB ON", intervalo=3)
 
-                self.esp_reader = esp
-                esp.start()
-                esp.iniciar_envio_periodico("USB ON", intervalo=3)
-
-            except Exception as e:
-                print("Não foi possível recriar ESPReader ao retomar:", e)
-
-        # ------------------------------------------------------------
-        # ATUALIZA TELA
-        # ------------------------------------------------------------
         frame = self.frames["TelaMonitoramento"]
         frame.atualizar_dados(self.simulacao_dados, retomar=True)
-        self.show_frame("TelaMonitoramento")
 
+        self.show_frame("TelaMonitoramento")
     # ======================================================================
     # TROCA DE TELAS
     # ======================================================================
@@ -153,9 +147,14 @@ class BatteryApp(tb.Window):
         frame = self.frames[nome]
 
         # Quando entra em Monitoramento manualmente
-        if nome == "TelaMonitoramento" and hasattr(frame, "atualizar_dados"):
+        if (
+            nome == "TelaMonitoramento"
+            and hasattr(frame, "atualizar_dados")
+            and not self.simulacao_dados.get("_retomada")
+        ):
             frame.atualizar_dados(self.simulacao_dados)
             frame._criar_log()
+
 
         if nome == "TelaHistorico":
             if hasattr(frame, "btn_voltar"):

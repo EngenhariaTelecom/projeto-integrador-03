@@ -189,7 +189,16 @@ class TelaMonitoramento(tb.Frame):
             self.controller.simulacao_dados["ciclo_atual"] = self.ciclo_atual
             self._criar_log()
         else:
-            self.ciclo_atual = int((self.controller.simulacao_dados.get("ciclo_atual", 0)) or 0)
+                self.ciclo_atual = int(dados.get("ciclo_atual", 0))
+                self.tempo_inicial = time.time() - int(dados.get("tempo_decorrido", 0))
+
+                descanso_restante = int(dados.get("descanso_restante", 0))
+                if descanso_restante > 0:
+                    self.descanso_em_andamento = True
+                    self.tempo_restante_descanso = descanso_restante
+                else:
+                    self.descanso_em_andamento = False
+                    self.tempo_restante_descanso = 0
 
         # Se houver ESPReader, sincroniza ciclo inicial no cache do ESP
         if esp:
@@ -263,27 +272,36 @@ class TelaMonitoramento(tb.Frame):
         try:
             os.makedirs(os.path.dirname(self.LOG_FILE), exist_ok=True)
 
-            dados_bateria = self.controller.simulacao_dados.get("dados_bateria", {})
+            agora = time.time()
+            tempo_decorrido = 0
+            if self.controller.esp_reader:
+                tempo_decorrido = agora - self.controller.esp_reader.tempo_inicial
 
             log_info = {
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "bateria": dados_bateria.get("nome", "---"),
-                "capacidade": dados_bateria.get("capacidade", "---"),
-                "serial": self.controller.simulacao_dados.get("porta", "---"),
-                "arquivo_csv": self.controller.simulacao_dados.get("csv", "---"),
-                "modo": self.controller.simulacao_dados.get("tipo", "---"),
+                "bateria": self.controller.simulacao_dados.get("dados_bateria", {}).get("nome"),
+                "capacidade": self.controller.simulacao_dados.get("dados_bateria", {}).get("capacidade"),
+                "serial": self.controller.simulacao_dados.get("porta"),
+                "arquivo_csv": self.controller.simulacao_dados.get("csv"),
+                "modo": self.controller.simulacao_dados.get("tipo"),
+
+                # 🔹 CICLOS
                 "ciclos_totais": self.ciclos_totais,
                 "ciclo_atual": int(self.ciclo_atual),
-                "descanso": self.controller.simulacao_dados.get("descanso", 0)
+
+                # 🔹 DESCANSO
+                "descanso": self.controller.simulacao_dados.get("descanso", 0),
+                "descanso_restante": getattr(self, "tempo_descanso_restante", 0),
+
+                # 🔹 TEMPO
+                "tempo_decorrido": int(tempo_decorrido)
             }
 
             with open(self.LOG_FILE, "w", encoding="utf-8") as f:
                 json.dump(log_info, f, indent=2, ensure_ascii=False)
 
-            print(f"[LOG] Arquivo de log criado/atualizado: {self.LOG_FILE}")
-
         except Exception as e:
-            print(f"[LOG] Erro ao criar/atualizar log: {e}")
+            print("[LOG] Erro ao salvar log:", e)
 
     def _apagar_log(self):
         if os.path.exists(self.LOG_FILE):

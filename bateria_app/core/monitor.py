@@ -63,11 +63,11 @@ class ESPReader(threading.Thread):
     # ===============================
     # CSV
     # ===============================
-    def definir_csv(self, caminho_csv):
-        """Define arquivo CSV e garante cabeçalho (inclui Corrente e Ciclo)."""
+    def definir_csv(self, caminho_csv, retomar=False, tempo_decorrido=0):
         self.arquivo_csv = os.path.abspath(caminho_csv)
         pasta = os.path.dirname(self.arquivo_csv)
         os.makedirs(pasta, exist_ok=True)
+
         if not os.path.exists(self.arquivo_csv):
             with open(self.arquivo_csv, "w", newline='') as f:
                 writer = csv.writer(f)
@@ -80,9 +80,21 @@ class ESPReader(threading.Thread):
                     "Descarga",
                     "Ciclo"
                 ])
-        # reseta tempo inicial sempre que (re)definir CSV
-        self.tempo_inicial = time.time()
+
+        if retomar:
+            # continua o tempo
+            self.tempo_inicial = time.time() - float(tempo_decorrido or 0)
+        else:
+            self.tempo_inicial = time.time()
+
         self._last_save_time = 0.0
+        
+    def restaurar_estado(self, modo, carga, descarga):
+        """Restaura estado lógico após retomada."""
+        self.modo = modo
+        self.carga = carga
+        self.descarga = descarga
+
 
     def set_ciclo(self, valor):
         """TelaMonitoramento deve chamar isso ao atualizar o ciclo."""
