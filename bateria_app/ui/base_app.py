@@ -100,61 +100,50 @@ class BatteryApp(tb.Window):
             return
 
         # ------------------------------------------------------------
-        # SIM — RETOMAR
+        # LOG → SIMULACAO_DADOS (COM CAPACIDADE E DESCANSO)
         # ------------------------------------------------------------
-        self.simulacao_dados = log_data
+        self.simulacao_dados = {
+            "porta": log_data.get("serial"),
+            "csv": log_data.get("arquivo_csv"),
+            "tipo": log_data.get("modo"),
+            "ciclos": log_data.get("ciclos_totais", 0),
+            "ciclo_atual": log_data.get("ciclo_atual", 0),
+            "descanso": log_data.get("descanso", 0),
+            "dados_bateria": {
+                "nome": log_data.get("bateria", "---"),
+                "capacidade": log_data.get("capacidade", "---")
+            }
+        }
 
-        porta = log_data.get("porta")
-        csv_path = log_data.get("csv")
-        ciclo_salvo = log_data.get("ciclo_atual", 0)
+        porta = self.simulacao_dados.get("porta")
+        csv_path = self.simulacao_dados.get("csv")
+        ciclo_salvo = self.simulacao_dados.get("ciclo_atual", 0)
 
-        # Criar novo ESPReader
+        # ------------------------------------------------------------
+        # REABRE SERIAL
+        # ------------------------------------------------------------
         if ESPReader is not None and porta:
             try:
                 esp = ESPReader(porta=porta)
-
-                # ESSENCIAL → linka controller
                 esp.controller = self
 
-                # Define CSV corretamente
                 if csv_path:
-                    try:
-                        esp.definir_csv(csv_path)
-                    except:
-                        pass
+                    esp.definir_csv(csv_path)
 
-                # Sincroniza ciclo armazenado
-                try:
-                    esp.set_ciclo(ciclo_salvo)
-                except:
-                    pass
+                esp.set_ciclo(ciclo_salvo)
 
-                # Iniciar thread de leitura
                 self.esp_reader = esp
-                self.esp_reader.start()
-
-                # Pequena pausa para iniciar sem travar a GUI
-                time.sleep(0.05)
-
-                # IMPORTANTÍSSIMO → iniciar envio periódico e gravação
-                try:
-                    esp.iniciar_envio_periodico("USB ON", intervalo=3)
-                except Exception as e:
-                    print("Falha ao iniciar envio periódico na retomada:", e)
-
-                print("✔ Retomada: ESPReader reiniciado com sucesso.")
+                esp.start()
+                esp.iniciar_envio_periodico("USB ON", intervalo=3)
 
             except Exception as e:
                 print("Não foi possível recriar ESPReader ao retomar:", e)
 
-        # Envia dados para tela Monitoramento
+        # ------------------------------------------------------------
+        # ATUALIZA TELA
+        # ------------------------------------------------------------
         frame = self.frames["TelaMonitoramento"]
-        try:
-            frame.atualizar_dados(self.simulacao_dados, retomar=True)
-        except TypeError:
-            # compatibilidade com versões antigas do método
-            frame.atualizar_dados(self.simulacao_dados)
-
+        frame.atualizar_dados(self.simulacao_dados, retomar=True)
         self.show_frame("TelaMonitoramento")
 
     # ======================================================================

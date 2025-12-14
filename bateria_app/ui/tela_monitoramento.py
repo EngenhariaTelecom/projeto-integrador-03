@@ -262,18 +262,26 @@ class TelaMonitoramento(tb.Frame):
     def _criar_log(self):
         try:
             os.makedirs(os.path.dirname(self.LOG_FILE), exist_ok=True)
+
+            dados_bateria = self.controller.simulacao_dados.get("dados_bateria", {})
+
             log_info = {
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "bateria": self.controller.simulacao_dados.get("dados_bateria", {}).get("nome", "---"),
+                "bateria": dados_bateria.get("nome", "---"),
+                "capacidade": dados_bateria.get("capacidade", "---"),
                 "serial": self.controller.simulacao_dados.get("porta", "---"),
                 "arquivo_csv": self.controller.simulacao_dados.get("csv", "---"),
                 "modo": self.controller.simulacao_dados.get("tipo", "---"),
                 "ciclos_totais": self.ciclos_totais,
-                "ciclo_atual": int(self.ciclo_atual)
+                "ciclo_atual": int(self.ciclo_atual),
+                "descanso": self.controller.simulacao_dados.get("descanso", 0)
             }
+
             with open(self.LOG_FILE, "w", encoding="utf-8") as f:
                 json.dump(log_info, f, indent=2, ensure_ascii=False)
+
             print(f"[LOG] Arquivo de log criado/atualizado: {self.LOG_FILE}")
+
         except Exception as e:
             print(f"[LOG] Erro ao criar/atualizar log: {e}")
 
