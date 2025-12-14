@@ -354,61 +354,80 @@ class TelaMonitoramento(tb.Frame):
     def atualizar_labels(self):
         if not self.winfo_exists():
             return
+
         try:
             esp = getattr(self.controller, "esp_reader", None)
             dados = getattr(self.controller, "simulacao_dados", {})
 
+            # -------- DADOS FIXOS --------
             if "csv" in dados:
                 rel_csv = os.path.relpath(dados["csv"], os.getcwd())
                 self.csv_label.config(text=f"CSV: {rel_csv}")
+            else:
+                self.csv_label.config(text="CSV: ---")
+
             bateria = dados.get("dados_bateria", {})
             self.bateria_label.config(text=f"Bateria: {bateria.get('nome','---')}")
             self.capacidade_label.config(text=f"Capacidade: {bateria.get('capacidade','---')}")
             self.porta_label.config(text=f"Porta: {dados.get('porta','---')}")
-            tipo = dados.get("tipo","---")
-            self.tipo_label.config(text=f"Tipo: {tipo}")
+            self.tipo_label.config(text=f"Tipo: {dados.get('tipo','---')}")
             self.ciclo_label.config(text=f"Ciclo: {self.ciclo_atual}/{self.ciclos_totais}")
 
+            # -------- DADOS DINÂMICOS (ESP) --------
             if esp:
-                try:
+                # Tensão
+                if esp.ultima_tensao is not None:
                     self.tensao_label.config(
-                        text=f"Tensão: {esp.ultima_tensao:.3f} V" if esp.ultima_tensao is not None else "Tensão: -- V"
+                        text=f"Tensão: {esp.ultima_tensao:.3f} V"
                     )
-                except Exception:
+                else:
                     self.tensao_label.config(text="Tensão: -- V")
-                try:
+
+                # Corrente
+                if esp.corrente is not None:
                     self.corrente_label.config(
-                        text=f"Corrente: {esp.corrente:.3f} A" if esp.corrente is not None else "Corrente: -- A"
+                        text=f"Corrente: {esp.corrente:.3f} A"
                     )
-                except Exception:
+                else:
                     self.corrente_label.config(text="Corrente: -- A")
+
                 self.modo_label.config(text=f"Modo: {esp.modo}")
                 self.carga_label.config(text=f"Carga: {esp.carga}")
                 self.descarga_label.config(text=f"Descarga: {esp.descarga}")
 
-                # Atualiza tempo total de execução
-                tempo_total = int(time.time() - self.tempo_inicial)
-                self.tempo_execucao_label.config(text=f"Tempo: {tempo_total}s")
+            else:
+                # ESP inexistente
+                self.tensao_label.config(text="Tensão: -- V")
+                self.corrente_label.config(text="Corrente: -- A")
+                self.modo_label.config(text="Modo: --")
+                self.carga_label.config(text="Carga: --")
+                self.descarga_label.config(text="Descarga: --")
 
-                # Se estiver descansando, mostrar contador regressivo
-                if self.descanso_em_andamento:
-                    self.descanso_label.config(text=f"Descanso: {int(self.tempo_restante_descanso)}s")
-                else:
-                    self.descanso_label.config(text="Descanso: --")
+            # -------- TEMPO --------
+            tempo_total = int(time.time() - self.tempo_inicial)
+            self.tempo_execucao_label.config(text=f"Tempo: {tempo_total}s")
 
-            if self.winfo_exists():
-                self.after_id = self.after(1000, self.atualizar_labels)
-        except Exception:
-            pass
+            # -------- DESCANSO --------
+            if getattr(self, "descanso_em_andamento", False):
+                self.descanso_label.config(
+                    text=f"Descanso: {int(self.tempo_restante_descanso)}s"
+                )
+            else:
+                self.descanso_label.config(text="Descanso: --")
+
+        except Exception as e:
+            print(f"[MONITORAMENTO] Erro em atualizar_labels: {e}")
+
+        # 🔁 SEMPRE reagenda
+        if self.winfo_exists():
+            self.after_id = self.after(1000, self.atualizar_labels)
 
     # =========================
     # Atualização do gráfico e checagem de término
     # =========================
     def atualizar_grafico(self, frame):
-        
-
         esp = getattr(self.controller, "esp_reader", None)
-        if not esp or esp.ultima_tensao is None:
+        if not esp or esp.ultima_tensao is None or not esp.running:
             return
 
         try:

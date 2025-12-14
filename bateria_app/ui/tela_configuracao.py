@@ -213,6 +213,7 @@ class TelaConfiguracao(ttk.Frame):
         # Inicializa e conecta a ESPReader
         try:
             self.controller.esp_reader = ESPReader(porta=porta)
+            self.controller.esp_reader.controller = self.controller
             self.controller.esp_reader.definir_csv(csv_file)
             self.controller.esp_reader.start()
         except Exception as e:

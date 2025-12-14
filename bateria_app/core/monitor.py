@@ -16,38 +16,49 @@ class ESPReader(threading.Thread):
 
     def __init__(self, porta=None, baudrate=115200):
         super().__init__(daemon=True)
+
         self.porta = porta
         self.baudrate = baudrate
         self.ser = None
+
+        # IMPORTANTE: não começa rodando, mas run() garante ativação
         self.running = False
+        self._stop_requested = False
+
         self.ultima_leitura = None
         self.ultima_tensao = None
         self.corrente = None
         self.modo = "AUTO"
         self.carga = "OFF"
         self.descarga = "OFF"
+
         self.arquivo_csv = None
         self.tempo_inicial = time.time()
         self.bateria_controller = BateriaController(self)
 
-        # Controle de envio periódico (comando USB ON)
+        # Envio periódico
         self._envio_ativo = False
         self._thread_envio = None
         self._envio_intervalo = 3
         self._envio_comando = "USB ON"
 
-        # Controle de gravação periódica (threading.Timer)
-        self.enviando = False    # flag para gravação periódica
+        # Gravação periódica
+        self.enviando = False
         self._save_timer = None
         self._save_interval = 1.0
 
         # Proteções
         self._last_save_time = 0.0
-        self._save_min_interval = 0.8  # evita duplicatas (s)
-        self._stop_requested = False
-
-        # cache do ciclo fornecido pela TelaMonitoramento
+        self._save_min_interval = 0.8
         self._ciclo_cache = 0
+
+        # Watchdog
+        self._ultimo_dado_ts = time.time()
+        self._timeout_serial = 5.0
+
+        # Controller (UI)
+        self.controller = None
+
 
     # ===============================
     # CSV
@@ -124,107 +135,136 @@ class ESPReader(threading.Thread):
     def conectar(self):
         try:
             if self.porta is None:
-                portas_disponiveis = list(serial.tools.list_ports.comports())
-                if not portas_disponiveis:
+                portas = list(serial.tools.list_ports.comports())
+                if not portas:
                     raise Exception("Nenhuma porta serial encontrada.")
-                for p in portas_disponiveis:
+
+                for p in portas:
                     try:
-                        self.ser = serial.Serial(p.device, self.baudrate, timeout=1)
-                        time.sleep(2)
+                        self.ser = serial.Serial(
+                            p.device,
+                            self.baudrate,
+                            timeout=0.2  # <<< CRÍTICO
+                        )
+                        time.sleep(1)
                         try:
                             self.ser.reset_input_buffer()
-                        except Exception:
+                        except:
                             pass
-                        linha = self.ser.readline().decode(errors='ignore').strip()
+
+                        linha = self.ser.readline().decode(errors="ignore").strip()
                         if linha:
                             self.porta = p.device
                             print(f"✅ ESP32 detectada na porta {p.device}")
                             break
                         else:
-                            try:
-                                self.ser.close()
-                            except Exception:
-                                pass
+                            self.ser.close()
+                            self.ser = None
                     except Exception:
                         continue
-                if not self.ser or not self.ser.is_open:
-                    raise Exception("Nenhuma ESP32 respondendo nas portas disponíveis.")
+
+                if not self.ser:
+                    raise Exception("Nenhuma ESP32 respondendo.")
+
             else:
-                self.ser = serial.Serial(self.porta, self.baudrate, timeout=1)
-                time.sleep(2)
+                self.ser = serial.Serial(
+                    self.porta,
+                    self.baudrate,
+                    timeout=0.2  # <<< CRÍTICO
+                )
+                time.sleep(1)
                 print(f"✅ Conectado manualmente à ESP32 na porta {self.porta}")
+
             self.running = True
+
         except Exception as e:
             print("❌ Erro ao conectar à ESP32:", e)
             self.running = False
+            raise
 
     # ===============================
     # Loop de leitura principal
     # ===============================
     def run(self):
-        if not self.ser:
-            self.conectar()
+        falha_inesperada = True
+        # 🔴 GARANTE que o loop possa rodar
+        self.running = True
+        self._stop_requested = False
+
+        try:
+            if not self.ser:
+                self.conectar()
+        except Exception:
+            if self.controller:
+                self.controller.after(
+                    0,
+                    self.controller._esp_desconectada_inesperadamente
+                )
+            return
+
+        self._ultimo_dado_ts = time.time()
+
         while self.running and not self._stop_requested:
+            agora = time.time()
+
+            # -------- WATCHDOG --------
+            if agora - self._ultimo_dado_ts > self._timeout_serial:
+                print("❌ Timeout serial: ESP desconectada.")
+                break
+
             try:
-                # readline tem timeout=1, então não fica preso indefinidamente
-                linha = ""
-                try:
-                    linha = self.ser.readline().decode(errors='ignore').strip() if (self.ser and self.ser.is_open) else ""
-                except Exception:
-                    # se a porta foi fechada, readline pode lançar; quebra o loop se parar solicitado
-                    if not self.running or self._stop_requested:
-                        break
-                    else:
-                        time.sleep(0.1)
-                        continue
+                if not (self.ser and self.ser.is_open):
+                    raise Exception("Serial fechada")
 
-                if not linha:
-                    # sem dados lidos -> continua
-                    continue
-
-                # ADICIONE ESSA LINHA AQUI:
-                print("[SERIAL RX]", linha)
-
-                # Ex.: "Vbat: 4.15 V | Mode: AUTO | Charge: ON | Disch: OFF | Corrente: 0.56 A"
-                if linha.startswith("Vbat:"):
-                    # print(linha)   # mantenha se quiser debug
-                    partes = [p.strip() for p in linha.split("|")]
-                    if len(partes) >= 5:
-                        try:
-                            # Tensao
-                            p0 = partes[0].split(":", 1)[1].strip()
-                            self.ultima_tensao = float(p0.replace("V", "").strip())
-                            # Mode
-                            self.modo = partes[1].split(":", 1)[1].strip()
-                            # Charge
-                            self.carga = partes[2].split(":", 1)[1].strip()
-                            # Disch
-                            self.descarga = partes[3].split(":", 1)[1].strip()
-                            # Corrente
-                            p4 = partes[4].split(":", 1)[1].strip()
-                            try:
-                                self.corrente = float(p4.replace("A", "").strip())
-                            except:
-                                self.corrente = None
-                            self.ultima_leitura = int(self.ultima_tensao * 1000) if self.ultima_tensao is not None else None
-
-                            # IMPORTANT: não chamamos salvar_csv aqui para evitar duplicação
-                            # a gravação periódica é controlada pelo timer (iniciar_envio_periodico)
-                        except Exception as e:
-                            print(f"⚠️ Erro ao interpretar linha: {e}")
+                linha = self.ser.readline().decode(errors="ignore").strip()
             except Exception:
-                # se ocorrer erro de leitura, aguarda e continua até running=False
-                # print("⚠️ Erro ao ler dados da ESP32.")
                 time.sleep(0.1)
                 continue
 
-        # fim do loop run
-        # garante que gravação periódica pare quando thread terminar
-        self._stop_requested = True
+            if not linha:
+                time.sleep(0.05)
+                continue
+
+            # -------- DADO RECEBIDO --------
+            self._ultimo_dado_ts = agora
+
+            if linha.startswith("Vbat:"):
+                partes = [p.strip() for p in linha.split("|")]
+                if len(partes) >= 5:
+                    try:
+                        self.ultima_tensao = float(
+                            partes[0].split(":")[1].replace("V", "").strip()
+                        )
+                        self.modo = partes[1].split(":")[1].strip()
+                        self.carga = partes[2].split(":")[1].strip()
+                        self.descarga = partes[3].split(":")[1].strip()
+                        self.corrente = float(
+                            partes[4].split(":")[1].replace("A", "").strip()
+                        )
+
+                        self.salvar_csv(
+                            self.ultima_tensao,
+                            self.corrente
+                        )
+                    except:
+                        pass
+
+        # -------- ENCERRAMENTO --------
+        falha_inesperada = not self._stop_requested
+
         try:
-            self.parar_envio_periodico()
+            if self.ser and self.ser.is_open:
+                self.ser.close()
         except:
             pass
+
+        self.running = False
+
+        if falha_inesperada and self.controller:
+            self.controller.after(
+                0,
+                self.controller._esp_desconectada_inesperadamente
+            )
 
     # ===============================
     # Envio periódico de comando (USB ON) e inicio do loop de gravação

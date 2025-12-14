@@ -204,6 +204,42 @@ class BatteryApp(tb.Window):
         self.simulacao_dados = {}
         self.show_frame("TelaInicial")
 
+    def _esp_desconectada_inesperadamente(self):
+    ###  Encerramento forçado por perda de comunicação com a ESP.
+    ###  Simula cancelamento manual sem confirmação.
+    # Para ESPReader
+        if self.esp_reader:
+            self.esp_reader._stop_requested = True
+            try:
+                self.esp_reader.parar_envio_periodico()
+            except:
+                pass
+            try:
+                self.esp_reader.parar()
+            except:
+                pass
+            self.esp_reader = None
+
+        # Remove log
+        if os.path.exists(self.log_file):
+            try:
+                os.remove(self.log_file)
+            except:
+                pass
+
+        # Limpa dados
+        self.simulacao_dados = {}
+
+        # Volta para tela inicial
+        self.show_frame("TelaInicial")
+
+        # Informa o usuário
+        messagebox.showerror(
+            "ESP desconectada",
+            "A ESP foi desconectada inesperadamente.\nO teste foi finalizado."
+        )
+
+
     # ======================================================================
     # FECHAR A APLICAÇÃO
     # ======================================================================
