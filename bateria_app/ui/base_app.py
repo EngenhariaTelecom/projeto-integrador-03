@@ -139,7 +139,15 @@ class BatteryApp(tb.Window):
         frame = self.frames["TelaMonitoramento"]
         frame.atualizar_dados(self.simulacao_dados, retomar=True)
 
+        if self.simulacao_dados["descanso_restante"] > 0:
+            try:
+                esp.bateria_controller.desligar_tudo()  # ou "IDLE", conforme seu firmware
+            except:
+                print("Erro ao desligar bateria durante retomada.")
+                pass
+
         self.show_frame("TelaMonitoramento")
+
     # ======================================================================
     # TROCA DE TELAS
     # ======================================================================

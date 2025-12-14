@@ -272,36 +272,37 @@ class TelaMonitoramento(tb.Frame):
         try:
             os.makedirs(os.path.dirname(self.LOG_FILE), exist_ok=True)
 
-            agora = time.time()
-            tempo_decorrido = 0
-            if self.controller.esp_reader:
-                tempo_decorrido = agora - self.controller.esp_reader.tempo_inicial
+            tempo_decorrido = int(time.time() - self.tempo_inicial)
+
+            descanso_restante = 0
+            if getattr(self, "descanso_em_andamento", False):
+                descanso_restante = int(self.tempo_restante_descanso)
 
             log_info = {
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "bateria": self.controller.simulacao_dados.get("dados_bateria", {}).get("nome"),
-                "capacidade": self.controller.simulacao_dados.get("dados_bateria", {}).get("capacidade"),
-                "serial": self.controller.simulacao_dados.get("porta"),
-                "arquivo_csv": self.controller.simulacao_dados.get("csv"),
-                "modo": self.controller.simulacao_dados.get("tipo"),
+                "bateria": self.controller.simulacao_dados.get("dados_bateria", {}).get("nome", "---"),
+                "capacidade": self.controller.simulacao_dados.get("dados_bateria", {}).get("capacidade", "---"),
+                "serial": self.controller.simulacao_dados.get("porta", "---"),
+                "arquivo_csv": self.controller.simulacao_dados.get("csv", "---"),
+                "modo": self.controller.simulacao_dados.get("tipo", "---"),
 
-                # 🔹 CICLOS
+                # 🔹 ciclos
                 "ciclos_totais": self.ciclos_totais,
-                "ciclo_atual": int(self.ciclo_atual),
+                "ciclo_atual": self.ciclo_atual,
 
-                # 🔹 DESCANSO
-                "descanso": self.controller.simulacao_dados.get("descanso", 0),
-                "descanso_restante": getattr(self, "tempo_descanso_restante", 0),
+                # 🔹 descanso
+                "descanso": int(self.controller.simulacao_dados.get("descanso", 0)),
+                "descanso_restante": descanso_restante,
 
-                # 🔹 TEMPO
-                "tempo_decorrido": int(tempo_decorrido)
+                # 🔹 tempo
+                "tempo_decorrido": tempo_decorrido
             }
 
             with open(self.LOG_FILE, "w", encoding="utf-8") as f:
                 json.dump(log_info, f, indent=2, ensure_ascii=False)
 
         except Exception as e:
-            print("[LOG] Erro ao salvar log:", e)
+            print(f"[LOG] Erro ao atualizar log: {e}")
 
     def _apagar_log(self):
         if os.path.exists(self.LOG_FILE):
@@ -443,6 +444,10 @@ class TelaMonitoramento(tb.Frame):
 
         except Exception as e:
             print(f"[MONITORAMENTO] Erro em atualizar_labels: {e}")
+
+        # 🔹 atualiza log continuamente durante execução
+        if self.controller.simulacao_dados:
+            self._criar_log()
 
         # 🔁 SEMPRE reagenda
         if self.winfo_exists():
