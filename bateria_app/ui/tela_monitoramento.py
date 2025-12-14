@@ -25,9 +25,8 @@ class TelaMonitoramento(tb.Frame):
         self.tempo_inicial = time.time()
 
         # Dados para gráfico (tensão apenas)
-        self.MAX_PONTOS = 10000
-        self.dados_tempo = deque(maxlen=self.MAX_PONTOS)
-        self.dados_tensao = deque(maxlen=self.MAX_PONTOS)
+        self.dados_tempo = deque()
+        self.dados_tensao = deque()
 
         # Controle de ciclos
         self.ciclos_totais = 0
