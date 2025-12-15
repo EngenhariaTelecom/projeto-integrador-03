@@ -28,8 +28,11 @@ Caso já tenha iniciado um teste anteriormente e deseje monitorar os gráficos g
 
 <div align="center">
 
-![Como verificar histórico.](imagens/verHistorico.gif)
+<img src="imagens/verHistorico.gif" width="800">
+
 </div>
+
+<br>
 
 Os arquivos .csv com os dados no Windows estarão salvos em Program Files > MonitorBateria > assets > dados. 
 
@@ -41,8 +44,9 @@ Abra o programa e clique em <u>Iniciar Teste</u> se quiser carregar e/ou descarr
 <br>
 
 <div align="center">
+    
+<img src="imagens/iniciarTeste.gif" width="800">
 
-![Como iniciar teste.](imagens/iniciarTeste.gif)
 </div>
 
 <br>
@@ -55,7 +59,8 @@ Na tela de Seleção de Bateria, o tipo PSA de 3.7V é escolhido por ser o únic
 
 <div align="center">
 
-![Como selecionar bateria.](imagens/telaSelecao.gif)
+<img src="imagens/telaSelecao.gif" width="800">
+
 </div>
 
 <br>
@@ -73,7 +78,8 @@ Além disso, há dois modos de teste que podem ser selecionados:
 
 <div align="center">
 
-![Como configurar simulação.](imagens/configuraSim.gif)
+<img src="imagens/configuraSim.gif" width="800">
+
 </div>
 
 <br>
@@ -88,7 +94,8 @@ Configurando a simulação, abrirá o gráfico de monitoramento da tensão de ca
 
 <div align="center">
 
-![Gráfico de simulação.](imagens/grafico.png)
+<img src="imagens/grafico.png" width="1000">
+
 </div>
 
 <br>
