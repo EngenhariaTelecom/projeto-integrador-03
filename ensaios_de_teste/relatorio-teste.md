@@ -36,7 +36,7 @@ Durante a carga, observa-se que a tensao sobe rapidamente no início e depois en
 
 
 <p align="center">
-  <img src="ciclo-carga.png" alt="Ciclo carga - Tensão vs Tempo" width="500"><br>
+  <img src="img/ciclo-carga.png" alt="Ciclo carga - Tensão vs Tempo" width="500"><br>
   <em>Figura 1 – Ciclo de carga: Tensão vs Tempo</em>
 </p>
 
@@ -45,7 +45,7 @@ A descarga é contínua, sem quedas abruptas o que indica boa estabilidade elét
 A tensão decresce de ~3,7 V até ~3,3 V no ciclo analisado, típico de região útil da descarga. Contudo, vale lembrar que os teste são realizados considerando a descarga competa quando a tensao abaixa de 3v.
 
 <p align="center">
-  <img src="ciclo-descarga.png" alt="Ciclo carga - Tensão vs Tempo" width="500"><br>
+  <img src="img/ciclo-descarga.png" alt="Ciclo carga - Tensão vs Tempo" width="500"><br>
   <em>Figura 2 – Ciclo de descarga: Tensão vs Tempo</em>
 </p>
 
