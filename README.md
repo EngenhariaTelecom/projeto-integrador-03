@@ -22,3 +22,6 @@ O projeto está organizado de modo que cada repositório separa funções espec�
 ## Funcionamento básico da integração software - hardware
 
 O software aplicativo utiliza a interface gráfica, onde o usuário poderá escolher a quantidade e a maneira que os ciclos ocorrerão. Com base na escolha do usuário, o comando de carga/descarga em modo auto/manual é enviado para a ESP32 presente no hardware. Com base no comando recebido, a ESP32 controla o circuito através da ativação/desativação de relés que ditam o modo do ciclo atual do circuito.
+
+## Executável do projeto
+O desenvolvimento do projeto ao longo de todo o semestre resultou no [executável final do projeto para sistemas WIndows](Executavel_Projeto_WIndows.zip)
