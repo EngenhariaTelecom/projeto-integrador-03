@@ -22,7 +22,7 @@ O primeiro passo para funcionamento do sistema é instalar o [executável](https
 <br>
 
 #### 2.2. Como verificar o histórico
-Caso já tenha iniciado um teste anteriormente e deseje monitorar os gráficos gerados, abra o programa clique em <u>Ver Histórico</u>.
+Caso já tenha iniciado um teste anteriormente e deseje monitorar os gráficos gerados, abra o programa e clique em <u>Ver Histórico</u>.
 
 <br>
 
