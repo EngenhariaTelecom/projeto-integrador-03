@@ -13,8 +13,10 @@ elaboração de relatórios automáticos com gráficos de tensão versus tempo.
 ## Organização do projeto
 O projeto está organizado de modo que cada repositório separa funções específicas do hardware e do software aplicativo do projeto:
 
-- [bateria_app](bateria_app/): É o diretório do software aplicativo que se comunica com o hardware diretamente e mostra ao usuário os resultados dos ciclos de carga e descarga para o usuário final
-- [firmware_esp](firmware_esp/): Esse é o diretório que contém os códigos com as versões de firmware da ESP 32 que controla o hardware em termos de como os dados serão enviados para o software. E também processa os comandos vindo do software para iniciar os processos de carga/descarga de forma manual (forçada) ou automática (em modo auto)
+- [bateria_app](bateria_app/): É o diretório do software aplicativo que se comunica com o hardware diretamente e mostra ao usuário os resultados dos ciclos de carga e descarga para o usuário final.
+- [documentacao](documentacao/): Diretório que contém o guia do usuário do software e datasheet do hardware.
+- [ensaios_de_teste](ensaios_de_teste/): Pasta dedicada para apresentar os testes práticos realizados.
+- [firmware_esp](firmware_esp/): Esse é o diretório que contém os códigos com as versões de firmware da ESP 32 que controla o hardware em termos de como os dados serão enviados para o software. E também processa os comandos vindo do software para iniciar os processos de carga/descarga de forma manual (forçada) ou automática (em modo auto).
 - [outros](outros/): É uma pasta com ferramentas de testes que foram úteis ao longo do desenvolvimneto do projeto, como um programa que cria seriais virtuais para utilizar no software e um programa monitor serial em python para avaliar como a ESP processa os dados recebidos do software.
 
 ## Funcionamento básico da integração software - hardware
